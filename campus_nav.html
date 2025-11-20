@@ -1,0 +1,1383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset='utf-8'>
+    <title>Bhhraman - GL Bajaj Campus Navigation</title>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+    <link rel='stylesheet' href='https://unpkg.com/leaflet/dist/leaflet.css' />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            overflow: hidden;
+            background: #0a0e27;
+        }
+
+        /* Loading Screen */
+        .loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 50%, #0a0e27 100%);
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            animation: fadeOut 0.8s ease-out 4.5s forwards;
+            overflow: hidden;
+        }
+
+        .loading-screen::before {
+            content: '';
+            position: absolute;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(102, 126, 234, 0.1) 0%, transparent 70%);
+            animation: rotate 20s linear infinite;
+        }
+
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        @keyframes fadeOut {
+            to {
+                opacity: 0;
+                visibility: hidden;
+            }
+        }
+
+        .loading-content {
+            text-align: center;
+            animation: scaleIn 1.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+            position: relative;
+            z-index: 1;
+        }
+
+        @keyframes scaleIn {
+            from {
+                opacity: 0;
+                transform: scale(0.5) translateY(50px);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+
+        .loading-logo {
+            font-size: 120px;
+            font-weight: 900;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 30px;
+            letter-spacing: 8px;
+            text-shadow: 0 0 60px rgba(102, 126, 234, 0.6);
+            animation: glow 2s ease-in-out infinite alternate, float 3s ease-in-out infinite;
+            position: relative;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-20px); }
+        }
+
+        @keyframes glow {
+            from {
+                filter: drop-shadow(0 0 30px rgba(102, 126, 234, 0.6));
+            }
+            to {
+                filter: drop-shadow(0 0 60px rgba(118, 75, 162, 0.9));
+            }
+        }
+
+        .loading-logo::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: shimmer 3s ease-in-out infinite;
+            opacity: 0.5;
+        }
+
+        @keyframes shimmer {
+            0%, 100% { transform: translateX(-100%); }
+            50% { transform: translateX(100%); }
+        }
+
+        .loading-subtitle {
+            font-size: 32px;
+            color: #a0aec0;
+            font-weight: 500;
+            margin-bottom: 50px;
+            letter-spacing: 4px;
+            animation: fadeInUp 1s ease-out 0.5s both;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .loading-spinner {
+            width: 80px;
+            height: 80px;
+            border: 5px solid rgba(102, 126, 234, 0.2);
+            border-top-color: #667eea;
+            border-right-color: #764ba2;
+            border-radius: 50%;
+            animation: spin 1.2s linear infinite;
+            margin: 0 auto;
+            box-shadow: 0 0 30px rgba(102, 126, 234, 0.5);
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-progress {
+            width: 400px;
+            height: 6px;
+            background: rgba(102, 126, 234, 0.2);
+            border-radius: 10px;
+            margin-top: 40px;
+            overflow: hidden;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .loading-progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+            border-radius: 10px;
+            animation: progress 5s ease-out forwards, pulse 2s ease-in-out infinite;
+            box-shadow: 0 0 20px rgba(102, 126, 234, 0.6);
+        }
+
+        @keyframes progress {
+            from { width: 0%; }
+            to { width: 100%; }
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.8; }
+        }
+
+        #map {
+            height: 100vh;
+            width: 100vw;
+            position: relative;
+            filter: brightness(0.9) contrast(1.1);
+        }
+
+        .panel {
+            position: absolute;
+            left: 25px;
+            top: 25px;
+            z-index: 1000;
+            background: rgba(20, 25, 45, 0.95);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            padding: 32px;
+            border-radius: 28px;
+            box-shadow: 0 25px 70px rgba(0, 0, 0, 0.6),
+                        0 0 0 1px rgba(102, 126, 234, 0.2),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            width: 420px;
+            animation: slideIn 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) 5s both;
+            border: 1px solid rgba(102, 126, 234, 0.1);
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-60px) scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0) scale(1);
+            }
+        }
+
+        .panel:hover {
+            transform: translateY(-3px) scale(1.01);
+            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.7),
+                        0 0 0 1px rgba(102, 126, 234, 0.3),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.15);
+            transition: all 0.3s ease;
+        }
+
+        .panel-header {
+            display: flex;
+            align-items: center;
+            gap: 18px;
+            margin-bottom: 32px;
+            padding-bottom: 28px;
+            border-bottom: 2px solid rgba(102, 126, 234, 0.2);
+            animation: fadeIn 0.6s ease-out 5.2s both;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .panel-header .icon {
+            width: 64px;
+            height: 64px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 32px;
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.5),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+            animation: iconPulse 2s ease-in-out infinite;
+            transition: transform 0.3s ease;
+        }
+
+        .panel-header .icon:hover {
+            transform: scale(1.1) rotate(5deg);
+        }
+
+        @keyframes iconPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .panel-header h2 {
+            font-size: 32px;
+            font-weight: 800;
+            background: linear-gradient(135deg, #ffffff 0%, #a0aec0 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: -0.5px;
+        }
+
+        .panel-header .subtitle {
+            font-size: 14px;
+            color: #718096;
+            font-weight: 500;
+            margin-top: 4px;
+            letter-spacing: 1.5px;
+        }
+
+        .form-group {
+            margin-bottom: 28px;
+            animation: fadeInUp 0.6s ease-out both;
+        }
+
+        .form-group:nth-child(2) { animation-delay: 5.4s; }
+        .form-group:nth-child(3) { animation-delay: 5.6s; }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .form-group label {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 14px;
+            font-weight: 600;
+            color: #e2e8f0;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+        }
+
+        .form-group label i {
+            color: #667eea;
+            font-size: 18px;
+            width: 24px;
+            animation: iconBounce 2s ease-in-out infinite;
+        }
+
+        @keyframes iconBounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-3px); }
+        }
+
+        .form-group select {
+            width: 100%;
+            padding: 18px 20px;
+            border: 2px solid rgba(102, 126, 234, 0.3);
+            border-radius: 16px;
+            font-size: 16px;
+            background: rgba(15, 20, 35, 0.9);
+            color: #e2e8f0;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            font-family: 'Poppins', sans-serif;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 12 12'%3E%3Cpath fill='%23667eea' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 20px center;
+            padding-right: 50px;
+            font-weight: 500;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        }
+
+        .form-group select:hover {
+            border-color: rgba(102, 126, 234, 0.5);
+            background: rgba(20, 25, 40, 0.95);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.3),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        }
+
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 5px rgba(102, 126, 234, 0.2),
+                        0 8px 25px rgba(102, 126, 234, 0.4),
+                        inset 0 0 0 1px rgba(102, 126, 234, 0.3);
+            transform: translateY(-2px) scale(1.02);
+            background: rgba(20, 25, 40, 1);
+        }
+
+        .form-group select option {
+            background: #1a1f3a;
+            color: #e2e8f0;
+            padding: 12px;
+            font-weight: 500;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 20px;
+            margin: 12px 0;
+            border: none;
+            border-radius: 16px;
+            font-size: 17px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            font-family: 'Poppins', sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+            position: relative;
+            overflow: hidden;
+            letter-spacing: 0.5px;
+            animation: fadeInUp 0.6s ease-out both;
+        }
+
+        .btn:nth-of-type(1) { animation-delay: 5.8s; }
+        .btn:nth-of-type(2) { animation-delay: 6s; }
+        .btn:nth-of-type(3) { animation-delay: 6.2s; }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.25);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        .btn:hover::before {
+            width: 500px;
+            height: 500px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.5),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-4px) scale(1.02);
+            box-shadow: 0 15px 40px rgba(102, 126, 234, 0.7),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.3);
+        }
+
+        .btn-primary:active {
+            transform: translateY(-2px) scale(1);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            box-shadow: 0 10px 30px rgba(245, 87, 108, 0.5),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-secondary:hover {
+            transform: translateY(-4px) scale(1.02);
+            box-shadow: 0 15px 40px rgba(245, 87, 108, 0.7),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.3);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            box-shadow: 0 10px 30px rgba(79, 172, 254, 0.5),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-success:hover {
+            transform: translateY(-4px) scale(1.02);
+            box-shadow: 0 15px 40px rgba(79, 172, 254, 0.7),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.3);
+        }
+
+        .btn span {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .btn i {
+            font-size: 18px;
+            transition: transform 0.3s ease;
+        }
+
+        .btn:hover i {
+            transform: scale(1.2) rotate(5deg);
+        }
+
+        .status {
+            margin-top: 24px;
+            padding: 18px 20px;
+            border-radius: 16px;
+            font-size: 14px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            animation: fadeIn 0.5s ease;
+            transition: all 0.3s ease;
+            border: 1px solid transparent;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .status.success {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+            border-color: rgba(16, 185, 129, 0.4);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+        }
+
+        .status.error {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+            border-color: rgba(239, 68, 68, 0.4);
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
+        }
+
+        .status.loading {
+            background: rgba(59, 130, 246, 0.2);
+            color: #3b82f6;
+            border-color: rgba(59, 130, 246, 0.4);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+        }
+
+        .status i {
+            font-size: 20px;
+        }
+
+        .info {
+            margin-top: 28px;
+            padding: 28px;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%);
+            border-radius: 20px;
+            border-left: 4px solid #667eea;
+            display: none;
+            animation: slideUp 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(102, 126, 234, 0.3);
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px) scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .info.show {
+            display: block;
+        }
+
+        .info .distance {
+            font-size: 24px;
+            font-weight: 700;
+            color: #e2e8f0;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .info .distance i {
+            color: #667eea;
+            font-size: 28px;
+            animation: iconBounce 2s ease-in-out infinite;
+        }
+
+        .info .path-info {
+            font-size: 15px;
+            color: #a0aec0;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .info .path-info i {
+            color: #718096;
+        }
+
+        /* Dark theme for Leaflet */
+        .leaflet-container {
+            background: #0a0e27;
+        }
+
+        .leaflet-control-container .leaflet-control {
+            background: rgba(20, 25, 45, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 14px;
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(102, 126, 234, 0.2);
+        }
+
+        .leaflet-control-container .leaflet-control a {
+            color: #e2e8f0;
+        }
+
+        .leaflet-control-container .leaflet-control a:hover {
+            background: rgba(102, 126, 234, 0.3);
+        }
+
+        /* Custom scrollbar */
+        select::-webkit-scrollbar {
+            width: 12px;
+        }
+
+        select::-webkit-scrollbar-track {
+            background: rgba(15, 20, 35, 0.9);
+            border-radius: 10px;
+        }
+
+        select::-webkit-scrollbar-thumb {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 10px;
+            border: 2px solid rgba(15, 20, 35, 0.9);
+        }
+
+        select::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+        }
+
+        /* Custom tooltip */
+        .leaflet-tooltip.custom-tooltip {
+            background: rgba(20, 25, 45, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(102, 126, 234, 0.4);
+            color: #e2e8f0;
+            font-family: 'Poppins', sans-serif;
+            font-weight: 600;
+            font-size: 13px;
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.5);
+            padding: 10px 14px;
+            border-radius: 10px;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .panel {
+                width: calc(100% - 30px);
+                left: 15px;
+                top: 15px;
+                padding: 24px;
+            }
+
+            .loading-logo {
+                font-size: 80px;
+            }
+
+            .loading-subtitle {
+                font-size: 24px;
+            }
+        }
+
+        /* Particle effect for loading */
+        .particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: rgba(102, 126, 234, 0.6);
+            border-radius: 50%;
+            animation: floatParticle 8s infinite ease-in-out;
+        }
+
+        @keyframes floatParticle {
+            0%, 100% {
+                transform: translate(0, 0) scale(1);
+                opacity: 0;
+            }
+            10% {
+                opacity: 1;
+            }
+            90% {
+                opacity: 1;
+            }
+            100% {
+                transform: translate(var(--x), var(--y)) scale(0);
+                opacity: 0;
+            }
+        }
+
+        /* Circle marker styling */
+        .arrow-marker {
+            background: transparent !important;
+            border: none !important;
+        }
+
+        .arrow-marker div {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .circle-marker {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #ffffff;
+            box-shadow: 0 0 15px rgba(255, 255, 255, 1),
+                        0 0 30px rgba(255, 255, 255, 0.8),
+                        0 0 45px rgba(255, 255, 255, 0.6);
+            animation: circlePulse 1.5s ease-in-out infinite, circleGlow 2s ease-in-out infinite;
+        }
+
+        @keyframes circlePulse {
+            0%, 100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+            50% {
+                transform: scale(1.4);
+                opacity: 0.9;
+            }
+        }
+
+        @keyframes circleGlow {
+            0%, 100% {
+                box-shadow: 0 0 15px rgba(255, 255, 255, 1),
+                            0 0 30px rgba(255, 255, 255, 0.8),
+                            0 0 45px rgba(255, 255, 255, 0.6);
+            }
+            50% {
+                box-shadow: 0 0 25px rgba(255, 255, 255, 1),
+                            0 0 50px rgba(255, 255, 255, 0.9),
+                            0 0 75px rgba(255, 255, 255, 0.7);
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div class="loading-screen" id="loadingScreen">
+        <div class="loading-content">
+            <div class="loading-logo">BHHRAMAN</div>
+            <div class="loading-subtitle">by GL Bajaj</div>
+            <div class="loading-spinner"></div>
+            <div class="loading-progress">
+                <div class="loading-progress-bar"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="map"></div>
+    <div class="panel">
+        <div class="panel-header">
+            <div class="icon">
+                <i class="fas fa-map-marked-alt"></i>
+            </div>
+            <div>
+                <h2>Bhhraman</h2>
+                <div class="subtitle">GL Bajaj Campus Navigation</div>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>
+                <i class="fas fa-map-marker-alt"></i>
+                Start Location
+            </label>
+            <select id="start">
+                <option value="">📍 Select start point...</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>
+                <i class="fas fa-flag-checkered"></i>
+                End Location
+            </label>
+            <select id="end">
+                <option value="">🎯 Select destination...</option>
+            </select>
+        </div>
+
+        <button id="findBtn" class="btn btn-primary">
+            <span>
+                <i class="fas fa-route"></i>
+                Find Route
+            </span>
+        </button>
+
+        <button class="btn btn-secondary" onclick="clearRoute()">
+            <span>
+                <i class="fas fa-times-circle"></i>
+                Clear Route
+            </span>
+        </button>
+
+        <button class="btn btn-success" onclick="loadAllData()">
+            <span>
+                <i class="fas fa-sync-alt"></i>
+                Reload Data
+            </span>
+        </button>
+
+        <div class="status loading" id="status">
+            <i class="fas fa-spinner fa-spin"></i>
+            <span>Loading campus data...</span>
+        </div>
+
+        <div class="info" id="routeInfo">
+            <div class="distance" id="distance">
+                <i class="fas fa-route"></i>
+                <span></span>
+            </div>
+            <div class="path-info" id="pathInfo">
+                <i class="fas fa-info-circle"></i>
+                <span></span>
+            </div>
+        </div>
+    </div>
+
+    <script src='https://unpkg.com/leaflet/dist/leaflet.js'></script>
+    <script>
+        const IMG_W = 1500;
+        const IMG_H = 1286;
+        
+        // Create particles for loading screen
+        function createParticles() {
+            const loadingScreen = document.getElementById('loadingScreen');
+            for (let i = 0; i < 20; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                const x = (Math.random() - 0.5) * 2000;
+                const y = (Math.random() - 0.5) * 2000;
+                particle.style.setProperty('--x', x + 'px');
+                particle.style.setProperty('--y', y + 'px');
+                particle.style.left = Math.random() * 100 + '%';
+                particle.style.top = Math.random() * 100 + '%';
+                particle.style.animationDelay = Math.random() * 2 + 's';
+                loadingScreen.appendChild(particle);
+            }
+        }
+        
+        createParticles();
+        
+        // Hide loading screen after 5 seconds
+        setTimeout(() => {
+            const loadingScreen = document.getElementById('loadingScreen');
+            if (loadingScreen) {
+                loadingScreen.style.display = 'none';
+            }
+        }, 5000);
+        
+        // Initialize map
+        const map = L.map('map', { crs: L.CRS.Simple, minZoom: -2, maxZoom: 2 });
+        const bounds = [[0, 0], [IMG_H, IMG_W]];
+        L.imageOverlay('GLBITM Map.jpg', bounds).addTo(map);
+        map.fitBounds(bounds);
+        
+        // Dark theme for map
+        map.getContainer().style.filter = 'brightness(0.9) contrast(1.1)';
+        
+        let nodes = [];
+        let edges = [];
+        let routes = [];
+        let nodeMap = {};
+        let edgeMap = {};
+        let routeMap = {};
+        let routeLayer = null;
+        let startMarker = null;
+        let endMarker = null;
+        let arrowMarker = null;
+        let arrowAnimation = null;
+        
+        function pointToLatLng(pt) {
+            return [pt[1], pt[0]];
+        }
+        
+        function updateStatus(msg, type = 'success') {
+            const status = document.getElementById('status');
+            const icon = status.querySelector('i');
+            const text = status.querySelector('span');
+            
+            status.className = `status ${type}`;
+            
+            if (type === 'loading') {
+                icon.className = 'fas fa-spinner fa-spin';
+            } else if (type === 'success') {
+                icon.className = 'fas fa-check-circle';
+            } else {
+                icon.className = 'fas fa-exclamation-circle';
+            }
+            
+            text.textContent = msg;
+        }
+        
+        async function loadAllData() {
+            updateStatus('Loading campus data...', 'loading');
+            try {
+                // Load nodes
+                const nodesRes = await fetch('nodes.json');
+                if (!nodesRes.ok) throw new Error('Failed to load nodes.json');
+                nodes = await nodesRes.json();
+                console.log('Nodes loaded:', nodes.length);
+                
+                // Load edges
+                try {
+                    const edgesRes = await fetch('edges.json');
+                    edges = edgesRes.ok ? await edgesRes.json() : [];
+                    console.log('Edges loaded:', edges.length);
+                } catch (e) {
+                    edges = [];
+                    console.warn('No edges.json:', e);
+                }
+                
+                // Load routes
+                try {
+                    const routesRes = await fetch('routes.json');
+                    routes = routesRes.ok ? await routesRes.json() : [];
+                    routeMap = {};
+                    routes.forEach(route => {
+                        routeMap[`${route.start}-${route.end}`] = route;
+                        routeMap[`${route.end}-${route.start}`] = route;
+                    });
+                    console.log('Routes loaded:', routes.length);
+                } catch (e) {
+                    routes = [];
+                    routeMap = {};
+                    console.warn('No routes.json:', e);
+                }
+                
+                // Create maps
+                nodeMap = {};
+                nodes.forEach(n => nodeMap[n.id] = n);
+                
+                edgeMap = {};
+                edges.forEach(e => {
+                    edgeMap[`${e.source}-${e.target}`] = e;
+                    edgeMap[`${e.target}-${e.source}`] = e;
+                });
+                
+                // Populate dropdowns
+                const startSelect = document.getElementById('start');
+                const endSelect = document.getElementById('end');
+                startSelect.innerHTML = '<option value="">📍 Select start point...</option>';
+                endSelect.innerHTML = '<option value="">🎯 Select destination...</option>';
+                
+                nodes.forEach(n => {
+                    const opt1 = document.createElement('option');
+                    opt1.value = n.id;
+                    opt1.textContent = n.name;
+                    startSelect.appendChild(opt1);
+                    
+                    const opt2 = document.createElement('option');
+                    opt2.value = n.id;
+                    opt2.textContent = n.name;
+                    endSelect.appendChild(opt2);
+                });
+                
+                // Draw nodes with dark theme styling
+                nodes.forEach(n => {
+                    L.circle(pointToLatLng([n.x, n.y]), {
+                        radius: 7,
+                        color: '#667eea',
+                        fillColor: '#1a1f3a',
+                        fillOpacity: 1,
+                        weight: 3
+                    }).addTo(map).bindTooltip(n.name, {
+                        className: 'custom-tooltip',
+                        permanent: false,
+                        direction: 'top',
+                        offset: [0, -10]
+                    });
+                });
+                
+                // Draw edges with dark theme styling
+                edges.forEach(e => {
+                    if (e.geom && e.geom.geometry) {
+                        const coords = e.geom.geometry.coordinates.map(pt => pointToLatLng(pt));
+                        L.polyline(coords, {
+                            color: '#4a5568',
+                            weight: 3,
+                            opacity: 0.4
+                        }).addTo(map);
+                    }
+                });
+                
+                updateStatus(`✓ Loaded: ${nodes.length} locations, ${edges.length} paths, ${routes.length} routes`, 'success');
+            } catch (error) {
+                console.error('Error:', error);
+                updateStatus('✗ Error: ' + error.message, 'error');
+                setTimeout(() => {
+                    alert('Error loading data: ' + error.message + '\n\nMake sure you are using a local server (http://localhost:8000)');
+                }, 500);
+            }
+        }
+        
+        function clearRoute() {
+            if (routeLayer) map.removeLayer(routeLayer);
+            if (startMarker) map.removeLayer(startMarker);
+            if (endMarker) map.removeLayer(endMarker);
+            if (arrowMarker) map.removeLayer(arrowMarker);
+            if (arrowAnimation) {
+                cancelAnimationFrame(arrowAnimation);
+                arrowAnimation = null;
+            }
+            routeLayer = null;
+            startMarker = null;
+            endMarker = null;
+            arrowMarker = null;
+            document.getElementById('routeInfo').classList.remove('show');
+            document.getElementById('start').value = '';
+            document.getElementById('end').value = '';
+        }
+        
+        function calculateAngle(fromLatLng, toLatLng) {
+            // Convert lat/lng to pixel coordinates for angle calculation
+            const fromPoint = map.latLngToContainerPoint(fromLatLng);
+            const toPoint = map.latLngToContainerPoint(toLatLng);
+            const dx = toPoint.x - fromPoint.x;
+            const dy = toPoint.y - fromPoint.y;
+            return Math.atan2(dy, dx) * (180 / Math.PI) + 90; // +90 to point right
+        }
+        
+        function createArrowIcon(angle) {
+            return L.divIcon({
+                className: 'arrow-marker',
+                html: `<div style="display: flex; align-items: center; justify-content: center;">
+                    <div class="circle-marker"></div>
+                </div>`,
+                iconSize: [20, 20],
+                iconAnchor: [10, 10]
+            });
+        }
+        
+        function animateArrowAlongPath(pathCoords, duration = 6000) {
+            if (!pathCoords || pathCoords.length < 2) return;
+            
+            // Remove any existing arrow
+            if (arrowMarker) {
+                map.removeLayer(arrowMarker);
+            }
+            if (arrowAnimation) {
+                cancelAnimationFrame(arrowAnimation);
+            }
+            
+            // Create interpolated path for smooth continuous movement
+            const interpolatedPath = [];
+            for (let i = 0; i < pathCoords.length - 1; i++) {
+                const start = pathCoords[i];
+                const end = pathCoords[i + 1];
+                const steps = 20; // Number of interpolation steps between each point
+                
+                for (let j = 0; j < steps; j++) {
+                    const t = j / steps;
+                    const lat = start[0] + (end[0] - start[0]) * t;
+                    const lng = start[1] + (end[1] - start[1]) * t;
+                    interpolatedPath.push([lat, lng]);
+                }
+            }
+            // Add the final point
+            interpolatedPath.push(pathCoords[pathCoords.length - 1]);
+            
+            const totalPoints = interpolatedPath.length;
+            const startTime = Date.now();
+            
+            // Start arrow at first point
+            const startPoint = interpolatedPath[0];
+            const nextPoint = interpolatedPath[1] || interpolatedPath[0];
+            
+            // Calculate initial angle
+            let initialAngle = 0;
+            try {
+                initialAngle = calculateAngle(startPoint, nextPoint);
+            } catch (e) {
+                initialAngle = 0;
+            }
+            
+            arrowMarker = L.marker(startPoint, {
+                icon: createArrowIcon(initialAngle),
+                zIndexOffset: 2000,
+                interactive: false
+            }).addTo(map);
+            
+            // Animate arrow continuously along path using requestAnimationFrame
+            function animate() {
+                const elapsed = Date.now() - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                
+                if (progress >= 1) {
+                    // Animation complete - keep arrow at end point
+                    const lastPoint = interpolatedPath[totalPoints - 1];
+                    const secondLastPoint = interpolatedPath[totalPoints - 2] || lastPoint;
+                    let finalAngle = 0;
+                    try {
+                        finalAngle = calculateAngle(secondLastPoint, lastPoint);
+                    } catch (e) {
+                        finalAngle = 0;
+                    }
+                    arrowMarker.setLatLng(lastPoint);
+                    arrowMarker.setIcon(createArrowIcon(finalAngle));
+                    arrowAnimation = null;
+                    return;
+                }
+                
+                // Calculate current position based on progress
+                const currentIndex = Math.floor(progress * (totalPoints - 1));
+                const segmentProgress = (progress * (totalPoints - 1)) - currentIndex;
+                
+                const currentPoint = interpolatedPath[currentIndex];
+                const nextPoint = interpolatedPath[Math.min(currentIndex + 1, totalPoints - 1)];
+                
+                // Interpolate between current and next point for ultra-smooth movement
+                const currentLat = currentPoint[0] + (nextPoint[0] - currentPoint[0]) * segmentProgress;
+                const currentLng = currentPoint[1] + (nextPoint[1] - currentPoint[1]) * segmentProgress;
+                const currentPosition = [currentLat, currentLng];
+                
+                // Calculate angle for arrow direction
+                let angle = 0;
+                try {
+                    angle = calculateAngle(currentPosition, nextPoint);
+                } catch (e) {
+                    angle = 0;
+                }
+                
+                // Update arrow position and rotation smoothly
+                arrowMarker.setLatLng(currentPosition);
+                arrowMarker.setIcon(createArrowIcon(angle));
+                
+                arrowAnimation = requestAnimationFrame(animate);
+            }
+            
+            arrowAnimation = requestAnimationFrame(animate);
+        }
+        
+        function buildAdj() {
+            const adj = {};
+            edges.forEach(e => {
+                if (!adj[e.source]) adj[e.source] = [];
+                if (!adj[e.target]) adj[e.target] = [];
+                adj[e.source].push({ to: e.target, weight: e.length });
+                adj[e.target].push({ to: e.source, weight: e.length });
+            });
+            return adj;
+        }
+        
+        function dijkstra(adj, start, goal) {
+            const dist = {};
+            const prev = {};
+            const visited = new Set();
+            const queue = [];
+            
+            Object.keys(adj).forEach(id => {
+                dist[id] = Infinity;
+                prev[id] = null;
+            });
+            
+            dist[start] = 0;
+            queue.push({ node: start, dist: 0 });
+            
+            while (queue.length > 0) {
+                queue.sort((a, b) => a.dist - b.dist);
+                const { node: u } = queue.shift();
+                if (visited.has(u)) continue;
+                visited.add(u);
+                if (u == goal) break;
+                
+                (adj[u] || []).forEach(n => {
+                    const alt = dist[u] + n.weight;
+                    if (alt < dist[n.to]) {
+                        dist[n.to] = alt;
+                        prev[n.to] = u;
+                        queue.push({ node: n.to, dist: alt });
+                    }
+                });
+            }
+            
+            if (dist[goal] === Infinity) return null;
+            
+            const path = [];
+            let cur = goal;
+            while (cur != null) {
+                path.unshift(parseInt(cur));
+                cur = prev[cur];
+                if (cur == start) {
+                    path.unshift(parseInt(start));
+                    break;
+                }
+            }
+            return { path, distance: dist[goal] };
+        }
+        
+        function drawRoute(path) {
+            clearRoute();
+            
+            const routeCoords = [];
+            for (let i = 0; i < path.length - 1; i++) {
+                const from = path[i];
+                const to = path[i + 1];
+                const edge = edgeMap[`${from}-${to}`];
+                if (edge && edge.geom && edge.geom.geometry) {
+                    const coords = edge.geom.geometry.coordinates.map(pt => pointToLatLng(pt));
+                    routeCoords.push(...coords);
+                } else {
+                    const fromNode = nodeMap[from];
+                    const toNode = nodeMap[to];
+                    if (fromNode && toNode) {
+                        routeCoords.push(pointToLatLng([fromNode.x, fromNode.y]));
+                        routeCoords.push(pointToLatLng([toNode.x, toNode.y]));
+                    }
+                }
+            }
+            
+            if (routeCoords.length > 0) {
+                routeLayer = L.polyline(routeCoords, {
+                    color: '#667eea',
+                    weight: 8,
+                    opacity: 0.95,
+                    lineJoin: 'round',
+                    lineCap: 'round'
+                }).addTo(map);
+                
+                const bounds = L.latLngBounds(routeCoords);
+                map.fitBounds(bounds, { padding: [50, 50] });
+                
+                // Animate arrow along path
+                setTimeout(() => {
+                    animateArrowAlongPath(routeCoords, 6000);
+                }, 500);
+            }
+            
+            const startNode = nodeMap[path[0]];
+            const endNode = nodeMap[path[path.length - 1]];
+            
+            if (startNode) {
+                startMarker = L.circleMarker(pointToLatLng([startNode.x, startNode.y]), {
+                    radius: 14,
+                    color: '#f5576c',
+                    fillColor: '#f5576c',
+                    fillOpacity: 1,
+                    weight: 4
+                }).addTo(map).bindTooltip('🚩 START: ' + startNode.name, { 
+                    permanent: true,
+                    className: 'custom-tooltip',
+                    direction: 'top'
+                });
+            }
+            
+            if (endNode) {
+                endMarker = L.circleMarker(pointToLatLng([endNode.x, endNode.y]), {
+                    radius: 14,
+                    color: '#00f2fe',
+                    fillColor: '#00f2fe',
+                    fillOpacity: 1,
+                    weight: 4
+                }).addTo(map).bindTooltip('🏁 END: ' + endNode.name, { 
+                    permanent: true,
+                    className: 'custom-tooltip',
+                    direction: 'top'
+                });
+            }
+        }
+        
+        function drawManualRoute(route, startId, endId) {
+            clearRoute();
+            
+            if (!route || !route.path) {
+                alert('Invalid route data');
+                return;
+            }
+            
+            const routeCoords = route.path.map(pt => pointToLatLng(pt));
+            routeLayer = L.polyline(routeCoords, {
+                color: '#667eea',
+                weight: 8,
+                opacity: 0.95,
+                lineJoin: 'round',
+                lineCap: 'round'
+            }).addTo(map);
+            
+            const startNode = nodeMap[startId];
+            const endNode = nodeMap[endId];
+            
+            if (startNode) {
+                startMarker = L.circleMarker(pointToLatLng([startNode.x, startNode.y]), {
+                    radius: 14,
+                    color: '#f5576c',
+                    fillColor: '#f5576c',
+                    fillOpacity: 1,
+                    weight: 4
+                }).addTo(map).bindTooltip('🚩 START: ' + startNode.name, { 
+                    permanent: true,
+                    className: 'custom-tooltip',
+                    direction: 'top'
+                });
+            }
+            
+            if (endNode) {
+                endMarker = L.circleMarker(pointToLatLng([endNode.x, endNode.y]), {
+                    radius: 14,
+                    color: '#00f2fe',
+                    fillColor: '#00f2fe',
+                    fillOpacity: 1,
+                    weight: 4
+                }).addTo(map).bindTooltip('🏁 END: ' + endNode.name, { 
+                    permanent: true,
+                    className: 'custom-tooltip',
+                    direction: 'top'
+                });
+            }
+            
+            const bounds = L.latLngBounds(routeCoords);
+            map.fitBounds(bounds, { padding: [50, 50] });
+            
+            // Animate arrow along path
+            setTimeout(() => {
+                animateArrowAlongPath(routeCoords, 6000);
+            }, 500);
+        }
+        
+        document.getElementById('findBtn').addEventListener('click', () => {
+            const startId = parseInt(document.getElementById('start').value);
+            const endId = parseInt(document.getElementById('end').value);
+            
+            if (!startId || !endId) {
+                updateStatus('Please select both start and end locations', 'error');
+                setTimeout(() => updateStatus(`✓ Ready: ${nodes.length} locations available`, 'success'), 2000);
+                return;
+            }
+            
+            if (startId === endId) {
+                updateStatus('Start and end cannot be the same', 'error');
+                setTimeout(() => updateStatus(`✓ Ready: ${nodes.length} locations available`, 'success'), 2000);
+                return;
+            }
+            
+            updateStatus('Finding route...', 'loading');
+            
+            // Check for manual route first
+            const routeKey = `${startId}-${endId}`;
+            const manualRoute = routeMap[routeKey];
+            
+            if (manualRoute) {
+                console.log('Using manual route:', manualRoute);
+                drawManualRoute(manualRoute, startId, endId);
+                const distanceInMeters = (manualRoute.length * 0.5).toFixed(1);
+                document.getElementById('distance').querySelector('span').textContent = 
+                    `${manualRoute.length.toFixed(1)} pixels (~${distanceInMeters} m)`;
+                document.getElementById('pathInfo').querySelector('span').textContent = 
+                    `Manually traced route • ${manualRoute.path.length} waypoints`;
+                document.getElementById('routeInfo').classList.add('show');
+                updateStatus('✓ Route found!', 'success');
+            } else {
+                // Use Dijkstra
+                const adj = buildAdj();
+                const result = dijkstra(adj, startId, endId);
+                
+                if (!result) {
+                    updateStatus('No route found. Create a manual route or check connections.', 'error');
+                    setTimeout(() => updateStatus(`✓ Ready: ${nodes.length} locations available`, 'success'), 3000);
+                    return;
+                }
+                
+                drawRoute(result.path);
+                
+                let totalDist = 0;
+                for (let i = 0; i < result.path.length - 1; i++) {
+                    const edge = edgeMap[`${result.path[i]}-${result.path[i+1]}`];
+                    if (edge) totalDist += edge.length;
+                }
+                
+                const distanceInMeters = (totalDist * 0.5).toFixed(1);
+                document.getElementById('distance').querySelector('span').textContent = 
+                    `${totalDist.toFixed(1)} pixels (~${distanceInMeters} m)`;
+                document.getElementById('pathInfo').querySelector('span').textContent = 
+                    `Calculated route • ${result.path.length} waypoints`;
+                document.getElementById('routeInfo').classList.add('show');
+                updateStatus('✓ Route calculated!', 'success');
+            }
+        });
+        
+        // Load data after loading screen
+        setTimeout(() => {
+            loadAllData();
+        }, 5000);
+    </script>
+</body>
+</html>

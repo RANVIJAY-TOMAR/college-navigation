@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Edge Builder - Connect EN Points via Black Paths</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+        body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
+        #map { height: 100vh; width: 70vw; float: left; }
+        .control-panel {
+            width: 30vw;
+            height: 100vh;
+            float: left;
+            background: #f5f5f5;
+            padding: 20px;
+            overflow-y: auto;
+            box-sizing: border-box;
+        }
+        .control-panel h2 { margin-top: 0; color: #2c3e50; }
+        .info-box {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            border-left: 4px solid #3498db;
+        }
+        .node-select {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0;
+            border: 2px solid #bdc3c7;
+            border-radius: 4px;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            margin: 5px 0;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        button:hover { background: #2980b9; }
+        button.delete-btn {
+            background: #e74c3c;
+            width: auto;
+            padding: 5px 10px;
+            font-size: 12px;
+        }
+        button.delete-btn:hover { background: #c0392b; }
+        .edge-list {
+            margin-top: 15px;
+        }
+        .edge-item {
+            background: white;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .edge-info {
+            flex: 1;
+        }
+        .edge-info strong {
+            color: #2c3e50;
+        }
+        textarea {
+            width: 100%;
+            height: 200px;
+            margin-top: 15px;
+            font-family: monospace;
+            font-size: 11px;
+            padding: 10px;
+            border: 2px solid #bdc3c7;
+            border-radius: 4px;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-size: 12px;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div class="control-panel">
+        <h2>🔗 Edge Builder</h2>
+        <div class="info-box">
+            <strong>Instructions:</strong><br>
+            1. Select two EN points that are connected by a <strong>black path</strong><br>
+            2. Click "Add Edge" to connect them<br>
+            3. Only connect points that have a direct black road between them<br>
+            4. Export when done
+        </div>
+        
+        <div id="status"></div>
+        
+        <label><strong>From (Source) EN Point:</strong></label>
+        <select id="sourceNode" class="node-select"></select>
+        
+        <label><strong>To (Target) EN Point:</strong></label>
+        <select id="targetNode" class="node-select"></select>
+        
+        <button onclick="addEdge()">Add Edge Connection</button>
+        <button onclick="loadNodes()" style="background: #27ae60;">Reload Nodes</button>
+        
+        <div class="edge-list">
+            <h3>Edges Created: <span id="edgeCount">0</span></h3>
+            <div id="edgeList"></div>
+        </div>
+        
+        <button onclick="exportEdges()" style="background: #27ae60; margin-top: 20px;">Export edges.json</button>
+        
+        <textarea id="jsonOutput" readonly placeholder="Edge JSON will appear here..."></textarea>
+    </div>
+    
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script>
+        const IMG_W = 1500;
+        const IMG_H = 1286;
+        const imgUrl = 'GLBITM Map.jpg';
+        
+        const map = L.map('map', {
+            crs: L.CRS.Simple,
+            minZoom: -2,
+            maxZoom: 2
+        });
+        
+        const bounds = [[0, 0], [IMG_H, IMG_W]];
+        const img = L.imageOverlay(imgUrl, bounds).addTo(map);
+        map.fitBounds(bounds);
+        
+        let nodes = [];
+        let edges = [];
+        let edgeId = 1;
+        let nodeMarkers = {};
+        let edgeLines = {};
+        
+        function pointToLatLng(pt) {
+            return [pt[1], pt[0]];
+        }
+        
+        function calculateDistance(p1, p2) {
+            return Math.sqrt((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2);
+        }
+        
+        function createPathCoords(start, end) {
+            const coords = [];
+            const numPoints = Math.max(5, Math.floor(calculateDistance(start, end) / 20));
+            for (let i = 0; i <= numPoints; i++) {
+                const t = i / numPoints;
+                const x = Math.round(start[0] + t * (end[0] - start[0]));
+                const y = Math.round(start[1] + t * (end[1] - start[1]));
+                coords.push([x, y]);
+            }
+            return coords;
+        }
+        
+        async function loadNodes() {
+            try {
+                const response = await fetch('nodes.json');
+                nodes = await response.json();
+                
+                if (nodes.length === 0) {
+                    showStatus('No nodes found! Please export nodes from coordinate_picker.html first.', 'error');
+                    return;
+                }
+                
+                showStatus(`Loaded ${nodes.length} EN points successfully!`, 'success');
+                
+                // Clear existing markers
+                Object.values(nodeMarkers).forEach(m => map.removeLayer(m));
+                nodeMarkers = {};
+                
+                // Add node markers to map
+                nodes.forEach(node => {
+                    const marker = L.circleMarker(pointToLatLng([node.x, node.y]), {
+                        radius: 8,
+                        color: '#2c3e50',
+                        fillColor: '#ecf0f1',
+                        fillOpacity: 1,
+                        weight: 2
+                    }).addTo(map).bindPopup(`<strong>${node.name}</strong><br>ID: ${node.id}<br>(${node.x}, ${node.y})`);
+                    
+                    nodeMarkers[node.id] = marker;
+                });
+                
+                // Populate dropdowns
+                const sourceSelect = document.getElementById('sourceNode');
+                const targetSelect = document.getElementById('targetNode');
+                
+                sourceSelect.innerHTML = '<option value="">Select source...</option>';
+                targetSelect.innerHTML = '<option value="">Select target...</option>';
+                
+                nodes.forEach(node => {
+                    const opt1 = document.createElement('option');
+                    opt1.value = node.id;
+                    opt1.textContent = `${node.id}: ${node.name}`;
+                    sourceSelect.appendChild(opt1);
+                    
+                    const opt2 = document.createElement('option');
+                    opt2.value = node.id;
+                    opt2.textContent = `${node.id}: ${node.name}`;
+                    targetSelect.appendChild(opt2);
+                });
+                
+                updateEdgeDisplay();
+            } catch (error) {
+                showStatus('Error loading nodes.json: ' + error.message, 'error');
+                console.error(error);
+            }
+        }
+        
+        function addEdge() {
+            const sourceId = parseInt(document.getElementById('sourceNode').value);
+            const targetId = parseInt(document.getElementById('targetNode').value);
+            
+            if (!sourceId || !targetId) {
+                showStatus('Please select both source and target nodes!', 'error');
+                return;
+            }
+            
+            if (sourceId === targetId) {
+                showStatus('Source and target cannot be the same!', 'error');
+                return;
+            }
+            
+            // Check if edge already exists
+            const exists = edges.some(e => 
+                (e.source === sourceId && e.target === targetId) ||
+                (e.source === targetId && e.target === sourceId)
+            );
+            
+            if (exists) {
+                showStatus('This edge already exists!', 'error');
+                return;
+            }
+            
+            const sourceNode = nodes.find(n => n.id === sourceId);
+            const targetNode = nodes.find(n => n.id === targetId);
+            
+            if (!sourceNode || !targetNode) {
+                showStatus('Node not found!', 'error');
+                return;
+            }
+            
+            const start = [sourceNode.x, sourceNode.y];
+            const end = [targetNode.x, targetNode.y];
+            const length = calculateDistance(start, end);
+            const coords = createPathCoords(start, end);
+            
+            const edge = {
+                id: edgeId++,
+                source: sourceId,
+                target: targetId,
+                length: Math.round(length * 100) / 100,
+                geom: {
+                    type: "Feature",
+                    geometry: {
+                        type: "LineString",
+                        coordinates: coords
+                    },
+                    properties: {
+                        id: edgeId - 1
+                    }
+                }
+            };
+            
+            edges.push(edge);
+            
+            // Draw edge on map
+            const lineCoords = coords.map(pt => pointToLatLng(pt));
+            const line = L.polyline(lineCoords, {
+                color: '#34495e',
+                weight: 4,
+                opacity: 0.7
+            }).addTo(map);
+            
+            edgeLines[edge.id] = line;
+            
+            showStatus(`Edge added: ${sourceNode.name} → ${targetNode.name}`, 'success');
+            updateEdgeDisplay();
+        }
+        
+        function removeEdge(edgeId) {
+            if (confirm('Remove this edge?')) {
+                edges = edges.filter(e => e.id !== edgeId);
+                if (edgeLines[edgeId]) {
+                    map.removeLayer(edgeLines[edgeId]);
+                    delete edgeLines[edgeId];
+                }
+                updateEdgeDisplay();
+                showStatus('Edge removed', 'success');
+            }
+        }
+        
+        function updateEdgeDisplay() {
+            document.getElementById('edgeCount').textContent = edges.length;
+            
+            const edgeList = document.getElementById('edgeList');
+            edgeList.innerHTML = '';
+            
+            edges.forEach(edge => {
+                const sourceNode = nodes.find(n => n.id === edge.source);
+                const targetNode = nodes.find(n => n.id === edge.target);
+                
+                const item = document.createElement('div');
+                item.className = 'edge-item';
+                item.innerHTML = `
+                    <div class="edge-info">
+                        <strong>Edge ${edge.id}:</strong> ${sourceNode.name} → ${targetNode.name}<br>
+                        <small>Distance: ${edge.length.toFixed(1)} pixels</small>
+                    </div>
+                    <button class="delete-btn" onclick="removeEdge(${edge.id})">Remove</button>
+                `;
+                edgeList.appendChild(item);
+            });
+            
+            document.getElementById('jsonOutput').value = JSON.stringify(edges, null, 2);
+        }
+        
+        function exportEdges() {
+            if (edges.length === 0) {
+                showStatus('No edges to export!', 'error');
+                return;
+            }
+            
+            const json = JSON.stringify(edges, null, 2);
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'edges.json';
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            showStatus(`Exported ${edges.length} edges to edges.json!`, 'success');
+        }
+        
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.className = `status ${type}`;
+            statusDiv.textContent = message;
+            setTimeout(() => {
+                statusDiv.textContent = '';
+                statusDiv.className = '';
+            }, 5000);
+        }
+        
+        // Load nodes on page load
+        loadNodes();
+    </script>
+</body>
+</html>
+

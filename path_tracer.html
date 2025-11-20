@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Path Tracer - Trace Black Paths/Roads</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+        body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
+        #map { height: 100vh; width: 70vw; float: left; }
+        .control-panel {
+            width: 30vw;
+            height: 100vh;
+            float: left;
+            background: #f5f5f5;
+            padding: 20px;
+            overflow-y: auto;
+            box-sizing: border-box;
+        }
+        .control-panel h2 { margin-top: 0; color: #2c3e50; }
+        .info-box {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            border-left: 4px solid #3498db;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            margin: 5px 0;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        button:hover { background: #2980b9; }
+        button.active {
+            background: #27ae60;
+        }
+        button.delete-btn {
+            background: #e74c3c;
+            width: auto;
+            padding: 5px 10px;
+            font-size: 12px;
+        }
+        button.delete-btn:hover { background: #c0392b; }
+        .path-list {
+            margin-top: 15px;
+        }
+        .path-item {
+            background: white;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .path-info {
+            flex: 1;
+            font-size: 12px;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-size: 12px;
+        }
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        textarea {
+            width: 100%;
+            height: 200px;
+            margin-top: 15px;
+            font-family: monospace;
+            font-size: 11px;
+            padding: 10px;
+            border: 2px solid #bdc3c7;
+            border-radius: 4px;
+        }
+        .mode-indicator {
+            padding: 10px;
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-weight: 600;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div class="control-panel">
+        <h2>🛣️ Path Tracer</h2>
+        <div class="info-box">
+            <strong>Instructions:</strong><br>
+            1. Click "Start Tracing" to begin<br>
+            2. Click on the map to trace a black path/road<br>
+            3. Click points along the path (follow the black road)<br>
+            4. Click "Finish Path" when done with this segment<br>
+            5. Repeat for all black paths on the map
+        </div>
+        
+        <div id="status"></div>
+        
+        <div class="mode-indicator" id="modeIndicator">
+            Ready to trace paths
+        </div>
+        
+        <button id="startBtn" onclick="startTracing()">Start Tracing Path</button>
+        <button id="finishBtn" onclick="finishPath()" disabled>Finish Current Path</button>
+        <button onclick="clearCurrentPath()" style="background: #f39c12;">Clear Current Path</button>
+        <button onclick="loadNodes()" style="background: #27ae60;">Load EN Points</button>
+        
+        <div class="path-list">
+            <h3>Traced Paths: <span id="pathCount">0</span></h3>
+            <div id="pathList"></div>
+        </div>
+        
+        <button onclick="exportEdges()" style="background: #27ae60; margin-top: 20px;">Export edges.json</button>
+        
+        <textarea id="jsonOutput" readonly placeholder="Edge JSON will appear here..."></textarea>
+    </div>
+    
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script>
+        const IMG_W = 1500;
+        const IMG_H = 1286;
+        const imgUrl = 'GLBITM Map.jpg';
+        
+        const map = L.map('map', {
+            crs: L.CRS.Simple,
+            minZoom: -2,
+            maxZoom: 2
+        });
+        
+        const bounds = [[0, 0], [IMG_H, IMG_W]];
+        const img = L.imageOverlay(imgUrl, bounds).addTo(map);
+        map.fitBounds(bounds);
+        
+        let nodes = [];
+        let edges = [];
+        let edgeId = 1;
+        let isTracing = false;
+        let currentPath = [];
+        let currentPathLine = null;
+        let nodeMarkers = {};
+        let pathLines = {};
+        
+        function pointToLatLng(pt) {
+            return [pt[1], pt[0]];
+        }
+        
+        function calculatePathLength(coords) {
+            let length = 0;
+            for (let i = 0; i < coords.length - 1; i++) {
+                const dx = coords[i+1][0] - coords[i][0];
+                const dy = coords[i+1][1] - coords[i][1];
+                length += Math.sqrt(dx*dx + dy*dy);
+            }
+            return length;
+        }
+        
+        function findNearestNodes(pathCoords) {
+            // Find the two EN points closest to the start and end of the path
+            if (nodes.length < 2) return { start: null, end: null };
+            
+            const startPoint = pathCoords[0];
+            const endPoint = pathCoords[pathCoords.length - 1];
+            
+            let nearestStart = null;
+            let nearestEnd = null;
+            let minStartDist = Infinity;
+            let minEndDist = Infinity;
+            
+            nodes.forEach(node => {
+                const distToStart = Math.sqrt(
+                    Math.pow(node.x - startPoint[0], 2) + 
+                    Math.pow(node.y - startPoint[1], 2)
+                );
+                const distToEnd = Math.sqrt(
+                    Math.pow(node.x - endPoint[0], 2) + 
+                    Math.pow(node.y - endPoint[1], 2)
+                );
+                
+                if (distToStart < minStartDist) {
+                    minStartDist = distToStart;
+                    nearestStart = node;
+                }
+                if (distToEnd < minEndDist) {
+                    minEndDist = distToEnd;
+                    nearestEnd = node;
+                }
+            });
+            
+            // Only return if within reasonable distance (50 pixels)
+            return {
+                start: minStartDist < 50 ? nearestStart : null,
+                end: minEndDist < 50 ? nearestEnd : null
+            };
+        }
+        
+        async function loadNodes() {
+            try {
+                const response = await fetch('nodes.json');
+                nodes = await response.json();
+                
+                if (nodes.length === 0) {
+                    showStatus('No nodes found! Please create nodes.json first.', 'info');
+                    return;
+                }
+                
+                showStatus(`Loaded ${nodes.length} EN points!`, 'success');
+                
+                // Clear existing markers
+                Object.values(nodeMarkers).forEach(m => map.removeLayer(m));
+                nodeMarkers = {};
+                
+                // Add node markers to map
+                nodes.forEach(node => {
+                    const marker = L.circleMarker(pointToLatLng([node.x, node.y]), {
+                        radius: 6,
+                        color: '#2c3e50',
+                        fillColor: '#ecf0f1',
+                        fillOpacity: 1,
+                        weight: 2
+                    }).addTo(map).bindPopup(`<strong>${node.name}</strong><br>ID: ${node.id}`);
+                    
+                    nodeMarkers[node.id] = marker;
+                });
+            } catch (error) {
+                showStatus('Error loading nodes.json: ' + error.message, 'info');
+            }
+        }
+        
+        function startTracing() {
+            if (isTracing) {
+                showStatus('Already tracing! Finish current path first.', 'info');
+                return;
+            }
+            
+            isTracing = true;
+            currentPath = [];
+            document.getElementById('startBtn').disabled = true;
+            document.getElementById('finishBtn').disabled = false;
+            document.getElementById('modeIndicator').textContent = 'Tracing mode: Click on map to add points to path';
+            document.getElementById('modeIndicator').style.background = '#d4edda';
+            document.getElementById('modeIndicator').style.borderColor = '#27ae60';
+            
+            showStatus('Click on the map to trace the black path. Click "Finish Path" when done.', 'info');
+        }
+        
+        function finishPath() {
+            if (!isTracing || currentPath.length < 2) {
+                showStatus('Need at least 2 points to create a path!', 'info');
+                return;
+            }
+            
+            const pathCoords = currentPath.map(pt => [pt.x, pt.y]);
+            const length = calculatePathLength(pathCoords);
+            
+            // Try to find nearest EN points
+            const nearest = findNearestNodes(pathCoords);
+            
+            let sourceId = null;
+            let targetId = null;
+            
+            if (nearest.start && nearest.end && nearest.start.id !== nearest.end.id) {
+                sourceId = nearest.start.id;
+                targetId = nearest.end.id;
+                showStatus(`Path connects: ${nearest.start.name} → ${nearest.end.name}`, 'success');
+            } else {
+                // Create a generic path segment
+                sourceId = `path_${edgeId}_start`;
+                targetId = `path_${edgeId}_end`;
+                showStatus('Path traced. Connect to EN points manually if needed.', 'info');
+            }
+            
+            const edge = {
+                id: edgeId++,
+                source: sourceId,
+                target: targetId,
+                length: Math.round(length * 100) / 100,
+                geom: {
+                    type: "Feature",
+                    geometry: {
+                        type: "LineString",
+                        coordinates: pathCoords
+                    },
+                    properties: {
+                        id: edgeId - 1
+                    }
+                },
+                traced: true,
+                pathCoords: pathCoords
+            };
+            
+            edges.push(edge);
+            
+            // Draw path on map
+            const lineCoords = pathCoords.map(pt => pointToLatLng(pt));
+            const line = L.polyline(lineCoords, {
+                color: '#34495e',
+                weight: 5,
+                opacity: 0.8
+            }).addTo(map);
+            
+            pathLines[edge.id] = line;
+            
+            // Reset tracing
+            if (currentPathLine) {
+                map.removeLayer(currentPathLine);
+                currentPathLine = null;
+            }
+            currentPath = [];
+            isTracing = false;
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('finishBtn').disabled = true;
+            document.getElementById('modeIndicator').textContent = 'Ready to trace paths';
+            document.getElementById('modeIndicator').style.background = '#fff3cd';
+            document.getElementById('modeIndicator').style.borderColor = '#ffc107';
+            
+            updatePathDisplay();
+        }
+        
+        function clearCurrentPath() {
+            if (currentPathLine) {
+                map.removeLayer(currentPathLine);
+                currentPathLine = null;
+            }
+            currentPath = [];
+            isTracing = false;
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('finishBtn').disabled = true;
+            document.getElementById('modeIndicator').textContent = 'Ready to trace paths';
+            document.getElementById('modeIndicator').style.background = '#fff3cd';
+            document.getElementById('modeIndicator').style.borderColor = '#ffc107';
+            showStatus('Current path cleared', 'info');
+        }
+        
+        function removePath(pathId) {
+            if (confirm('Remove this traced path?')) {
+                edges = edges.filter(e => e.id !== pathId);
+                if (pathLines[pathId]) {
+                    map.removeLayer(pathLines[pathId]);
+                    delete pathLines[pathId];
+                }
+                updatePathDisplay();
+                showStatus('Path removed', 'success');
+            }
+        }
+        
+        map.on('click', function(e) {
+            if (!isTracing) return;
+            
+            const point = e.latlng;
+            const x = Math.round(point.lng);
+            const y = Math.round(point.lat);
+            
+            currentPath.push({ x, y });
+            
+            // Update the line showing current path
+            if (currentPathLine) {
+                map.removeLayer(currentPathLine);
+            }
+            
+            if (currentPath.length > 1) {
+                const coords = currentPath.map(pt => pointToLatLng([pt.x, pt.y]));
+                currentPathLine = L.polyline(coords, {
+                    color: '#e74c3c',
+                    weight: 4,
+                    opacity: 0.6,
+                    dashArray: '5, 5'
+                }).addTo(map);
+            }
+            
+            // Add a small marker for the point
+            L.circleMarker([y, x], {
+                radius: 3,
+                color: '#e74c3c',
+                fillColor: '#e74c3c',
+                fillOpacity: 1
+            }).addTo(map);
+        });
+        
+        function updatePathDisplay() {
+            document.getElementById('pathCount').textContent = edges.length;
+            
+            const pathList = document.getElementById('pathList');
+            pathList.innerHTML = '';
+            
+            edges.forEach(edge => {
+                const sourceName = typeof edge.source === 'number' 
+                    ? nodes.find(n => n.id === edge.source)?.name || `Node ${edge.source}`
+                    : edge.source;
+                const targetName = typeof edge.target === 'number'
+                    ? nodes.find(n => n.id === edge.target)?.name || `Node ${edge.target}`
+                    : edge.target;
+                
+                const item = document.createElement('div');
+                item.className = 'path-item';
+                item.innerHTML = `
+                    <div class="path-info">
+                        <strong>Path ${edge.id}:</strong> ${sourceName} → ${targetName}<br>
+                        <small>Length: ${edge.length.toFixed(1)} pixels | Points: ${edge.pathCoords.length}</small>
+                    </div>
+                    <button class="delete-btn" onclick="removePath(${edge.id})">Remove</button>
+                `;
+                pathList.appendChild(item);
+            });
+            
+            // Convert to proper edge format for export
+            const exportEdges = edges.map(edge => {
+                const exportEdge = {
+                    id: edge.id,
+                    source: typeof edge.source === 'number' ? edge.source : null,
+                    target: typeof edge.target === 'number' ? edge.target : null,
+                    length: edge.length,
+                    geom: edge.geom
+                };
+                return exportEdge;
+            }).filter(e => e.source !== null && e.target !== null);
+            
+            document.getElementById('jsonOutput').value = JSON.stringify(exportEdges, null, 2);
+        }
+        
+        function exportEdges() {
+            // Only export edges that connect actual EN points
+            const validEdges = edges.filter(e => 
+                typeof e.source === 'number' && typeof e.target === 'number'
+            );
+            
+            if (validEdges.length === 0) {
+                showStatus('No valid edges to export! Make sure paths connect EN points.', 'info');
+                return;
+            }
+            
+            const exportData = validEdges.map(edge => ({
+                id: edge.id,
+                source: edge.source,
+                target: edge.target,
+                length: edge.length,
+                geom: edge.geom
+            }));
+            
+            const json = JSON.stringify(exportData, null, 2);
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'edges.json';
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            showStatus(`Exported ${exportData.length} paths to edges.json!`, 'success');
+        }
+        
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.className = `status ${type}`;
+            statusDiv.textContent = message;
+            setTimeout(() => {
+                statusDiv.textContent = '';
+                statusDiv.className = '';
+            }, 5000);
+        }
+        
+        // Load nodes on page load
+        loadNodes();
+    </script>
+</body>
+</html>

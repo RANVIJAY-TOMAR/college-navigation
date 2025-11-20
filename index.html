@@ -1,0 +1,489 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset='utf-8'>
+  <title>GLBITM Campus Navigation System</title>
+  <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+  <link rel='stylesheet' href='https://unpkg.com/leaflet/dist/leaflet.css' />
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    #map {
+      height: 100%;
+      width: 100%;
+    }
+    .control-panel {
+      position: absolute;
+      left: 15px;
+      top: 15px;
+      z-index: 1000;
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      min-width: 280px;
+      max-width: 320px;
+    }
+    .control-panel h2 {
+      margin: 0 0 15px 0;
+      color: #2c3e50;
+      font-size: 20px;
+      border-bottom: 2px solid #3498db;
+      padding-bottom: 10px;
+    }
+    .control-panel label {
+      display: block;
+      margin: 12px 0 5px 0;
+      font-weight: 600;
+      color: #34495e;
+      font-size: 14px;
+    }
+    .control-panel select {
+      width: 100%;
+      padding: 10px;
+      border: 2px solid #bdc3c7;
+      border-radius: 5px;
+      font-size: 14px;
+      background: white;
+      cursor: pointer;
+      transition: border-color 0.3s;
+    }
+    .control-panel select:hover {
+      border-color: #3498db;
+    }
+    .control-panel select:focus {
+      outline: none;
+      border-color: #3498db;
+      box-shadow: 0 0 5px rgba(52, 152, 219, 0.3);
+    }
+    .control-panel button {
+      width: 100%;
+      padding: 12px;
+      margin-top: 15px;
+      background: #3498db;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.3s, transform 0.1s;
+    }
+    .control-panel button:hover {
+      background: #2980b9;
+      transform: translateY(-1px);
+    }
+    .control-panel button:active {
+      transform: translateY(0);
+    }
+    .control-panel button:disabled {
+      background: #95a5a6;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .route-info {
+      margin-top: 15px;
+      padding: 12px;
+      background: #ecf0f1;
+      border-radius: 5px;
+      border-left: 4px solid #3498db;
+    }
+    .route-info.hidden {
+      display: none;
+    }
+    .route-info .distance {
+      font-size: 16px;
+      font-weight: 600;
+      color: #2c3e50;
+      margin-bottom: 5px;
+    }
+    .route-info .path-info {
+      font-size: 12px;
+      color: #7f8c8d;
+      margin-top: 8px;
+    }
+    .legend {
+      position: absolute;
+      bottom: 15px;
+      left: 15px;
+      z-index: 1000;
+      background: white;
+      padding: 12px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      font-size: 12px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      margin: 5px 0;
+    }
+    .legend-color {
+      width: 20px;
+      height: 4px;
+      margin-right: 8px;
+      border-radius: 2px;
+    }
+  </style>
+</head>
+<body>
+<div id='map'></div>
+<div class='control-panel'>
+  <h2>🗺️ Campus Navigator</h2>
+  <label for='start'>Start Location (EN Point):</label>
+  <select id='start'></select>
+  <label for='end'>End Location (EN Point):</label>
+  <select id='end'></select>
+  <button id='routeBtn'>Find Route</button>
+  <div id='routeInfo' class='route-info hidden'>
+    <div class='distance' id='distance'></div>
+    <div class='path-info' id='pathInfo'></div>
+  </div>
+</div>
+<div class='legend'>
+  <div class='legend-item'>
+    <div class='legend-color' style='background: #2c3e50;'></div>
+    <span>Roads (Black paths only)</span>
+  </div>
+  <div class='legend-item'>
+    <div class='legend-color' style='background: #3498db;'></div>
+    <span>Selected Route</span>
+  </div>
+  <div class='legend-item'>
+    <div class='legend-color' style='background: #e74c3c;'></div>
+    <span>Start Point</span>
+  </div>
+  <div class='legend-item'>
+    <div class='legend-color' style='background: #27ae60;'></div>
+    <span>End Point</span>
+  </div>
+</div>
+<script src='https://unpkg.com/leaflet/dist/leaflet.js'></script>
+<script>
+const IMG_W = 1500;
+const IMG_H = 1286;
+const imgUrl = 'GLBITM Map.jpg';
+
+// Initialize map
+const map = L.map('map', {
+  crs: L.CRS.Simple,
+  minZoom: -2,
+  maxZoom: 2
+});
+
+const bounds = [[0, 0], [IMG_H, IMG_W]];
+const img = L.imageOverlay(imgUrl, bounds).addTo(map);
+map.fitBounds(bounds);
+
+let nodes = [];
+let edges = [];
+let nodeMap = {};
+let edgeMap = {};
+let adj = {};
+let routeLayer = null;
+let startMarker = null;
+let endMarker = null;
+
+async function loadData() {
+  try {
+    nodes = await fetch('nodes.json').then(r => r.json());
+    edges = await fetch('edges.json').then(r => r.json());
+    
+    // Create lookup maps
+    nodeMap = Object.fromEntries(nodes.map(n => [n.id, n]));
+    edgeMap = {};
+    edges.forEach(edge => {
+      const key1 = `${edge.source}-${edge.target}`;
+      const key2 = `${edge.target}-${edge.source}`;
+      edgeMap[key1] = edge;
+      edgeMap[key2] = edge;
+    });
+    
+    return { nodes, edges };
+  } catch (error) {
+    console.error('Error loading data:', error);
+    alert('Error loading map data. Please ensure nodes.json and edges.json are available.');
+    return { nodes: [], edges: [] };
+  }
+}
+
+function pointToLatLng(pt) {
+  return [pt[1], pt[0]];
+}
+
+function addOptions(nodes) {
+  const startSelect = document.getElementById('start');
+  const endSelect = document.getElementById('end');
+  
+  // Clear existing options
+  startSelect.innerHTML = '<option value="">Select start location...</option>';
+  endSelect.innerHTML = '<option value="">Select end location...</option>';
+  
+  nodes.forEach(n => {
+    const opt1 = document.createElement('option');
+    opt1.value = n.id;
+    opt1.textContent = n.name;
+    startSelect.appendChild(opt1);
+    
+    const opt2 = document.createElement('option');
+    opt2.value = n.id;
+    opt2.textContent = n.name;
+    endSelect.appendChild(opt2);
+  });
+}
+
+function buildAdj(edges) {
+  const adj = {};
+  edges.forEach(edge => {
+    const u = edge.source;
+    const v = edge.target;
+    if (!adj[u]) adj[u] = [];
+    if (!adj[v]) adj[v] = [];
+    adj[u].push({ to: v, weight: edge.length, edgeId: edge.id });
+    adj[v].push({ to: u, weight: edge.length, edgeId: edge.id });
+  });
+  return adj;
+}
+
+function dijkstra(adj, start, goal) {
+  const dist = {};
+  const prev = {};
+  const visited = new Set();
+  const queue = [];
+  
+  // Initialize distances
+  Object.keys(adj).forEach(nodeId => {
+    dist[nodeId] = Infinity;
+    prev[nodeId] = null;
+  });
+  
+  dist[start] = 0;
+  queue.push({ node: start, dist: 0 });
+  
+  while (queue.length > 0) {
+    // Sort queue by distance (simple priority queue)
+    queue.sort((a, b) => a.dist - b.dist);
+    const { node: u } = queue.shift();
+    
+    if (visited.has(u)) continue;
+    visited.add(u);
+    
+    if (u === goal) break;
+    
+    const neighbors = adj[u] || [];
+    neighbors.forEach(neighbor => {
+      const v = neighbor.to;
+      const alt = dist[u] + neighbor.weight;
+      
+      if (alt < dist[v]) {
+        dist[v] = alt;
+        prev[v] = u;
+        queue.push({ node: v, dist: alt });
+      }
+    });
+  }
+  
+  if (dist[goal] === Infinity) return null;
+  
+  // Reconstruct path
+  const path = [];
+  let current = goal;
+  while (current !== null && current !== undefined) {
+    path.unshift(parseInt(current));
+    current = prev[current];
+    if (current === start) {
+      path.unshift(parseInt(start));
+      break;
+    }
+  }
+  
+  return { path, distance: dist[goal] };
+}
+
+function drawGraph(nodes, edges) {
+  // Draw all edges (roads) in grey
+  edges.forEach(edge => {
+    const coords = edge.geom.geometry.coordinates.map(pt => pointToLatLng(pt));
+    L.polyline(coords, {
+      color: '#34495e',
+      weight: 4,
+      opacity: 0.6
+    }).addTo(map);
+  });
+  
+  // Draw all nodes (EN points) as small circles
+  nodes.forEach(n => {
+    L.circle(pointToLatLng([n.x, n.y]), {
+      radius: 5,
+      color: '#2c3e50',
+      fillColor: '#ecf0f1',
+      fillOpacity: 1,
+      weight: 2
+    }).addTo(map).bindTooltip(n.name, {
+      permanent: false,
+      direction: 'top',
+      offset: [0, -10]
+    });
+  });
+}
+
+function clearRoute() {
+  if (routeLayer) {
+    map.removeLayer(routeLayer);
+    routeLayer = null;
+  }
+  if (startMarker) {
+    map.removeLayer(startMarker);
+    startMarker = null;
+  }
+  if (endMarker) {
+    map.removeLayer(endMarker);
+    endMarker = null;
+  }
+  document.getElementById('routeInfo').classList.add('hidden');
+}
+
+function drawRoute(path, nodes, edges) {
+  clearRoute();
+  
+  if (!path || path.length < 2) {
+    alert('No valid route found between the selected locations.');
+    return;
+  }
+  
+  // Draw route following actual edge geometries
+  const routeCoords = [];
+  
+  for (let i = 0; i < path.length - 1; i++) {
+    const fromNode = path[i];
+    const toNode = path[i + 1];
+    
+    // Find the edge connecting these nodes
+    const edgeKey = `${fromNode}-${toNode}`;
+    const edge = edgeMap[edgeKey];
+    
+    if (edge && edge.geom && edge.geom.geometry) {
+      // Use the actual edge geometry
+      const edgeCoords = edge.geom.geometry.coordinates.map(pt => pointToLatLng(pt));
+      routeCoords.push(...edgeCoords);
+    } else {
+      // Fallback: straight line if edge not found
+      const from = nodeMap[fromNode];
+      const to = nodeMap[toNode];
+      if (from && to) {
+        routeCoords.push(pointToLatLng([from.x, from.y]));
+        routeCoords.push(pointToLatLng([to.x, to.y]));
+      }
+    }
+  }
+  
+  // Draw the route
+  routeLayer = L.polyline(routeCoords, {
+    color: '#3498db',
+    weight: 6,
+    opacity: 0.9,
+    lineJoin: 'round',
+    lineCap: 'round'
+  }).addTo(map);
+  
+  // Add start marker
+  const startNode = nodeMap[path[0]];
+  if (startNode) {
+    startMarker = L.circleMarker(pointToLatLng([startNode.x, startNode.y]), {
+      radius: 10,
+      color: '#e74c3c',
+      fillColor: '#e74c3c',
+      fillOpacity: 1,
+      weight: 3
+    }).addTo(map).bindTooltip('START: ' + startNode.name, { permanent: true });
+  }
+  
+  // Add end marker
+  const endNode = nodeMap[path[path.length - 1]];
+  if (endNode) {
+    endMarker = L.circleMarker(pointToLatLng([endNode.x, endNode.y]), {
+      radius: 10,
+      color: '#27ae60',
+      fillColor: '#27ae60',
+      fillOpacity: 1,
+      weight: 3
+    }).addTo(map).bindTooltip('END: ' + endNode.name, { permanent: true });
+  }
+  
+  // Fit map to show entire route
+  if (routeCoords.length > 0) {
+    const routeBounds = L.latLngBounds(routeCoords);
+    map.fitBounds(routeBounds, { padding: [50, 50] });
+  }
+}
+
+function calculateDistance(path) {
+  let totalDistance = 0;
+  for (let i = 0; i < path.length - 1; i++) {
+    const fromNode = path[i];
+    const toNode = path[i + 1];
+    const edgeKey = `${fromNode}-${toNode}`;
+    const edge = edgeMap[edgeKey];
+    if (edge) {
+      totalDistance += edge.length;
+    }
+  }
+  return totalDistance;
+}
+
+// Initialize application
+loadData().then(({ nodes, edges }) => {
+  if (nodes.length === 0 || edges.length === 0) {
+    return;
+  }
+  
+  addOptions(nodes);
+  drawGraph(nodes, edges);
+  adj = buildAdj(edges);
+  
+  document.getElementById('routeBtn').addEventListener('click', () => {
+    const startId = parseInt(document.getElementById('start').value);
+    const endId = parseInt(document.getElementById('end').value);
+    
+    if (!startId || !endId) {
+      alert('Please select both start and end locations.');
+      return;
+    }
+    
+    if (startId === endId) {
+      alert('Start and end locations cannot be the same.');
+      return;
+    }
+    
+    const result = dijkstra(adj, startId, endId);
+    
+    if (!result) {
+      alert('No route found between the selected locations.');
+      clearRoute();
+      return;
+    }
+    
+    drawRoute(result.path, nodes, edges);
+    
+    // Update route info
+    const distance = calculateDistance(result.path);
+    const distanceInMeters = (distance * 0.5).toFixed(1); // Approximate conversion (adjust based on map scale)
+    
+    document.getElementById('distance').textContent = 
+      `Distance: ${distance.toFixed(1)} pixels (~${distanceInMeters} meters)`;
+    document.getElementById('pathInfo').textContent = 
+      `Path: ${result.path.length} waypoints via EN points`;
+    document.getElementById('routeInfo').classList.remove('hidden');
+  });
+  
+  // Clear route when selections change
+  document.getElementById('start').addEventListener('change', clearRoute);
+  document.getElementById('end').addEventListener('change', clearRoute);
+});
+</script>
+</body>
+</html>
