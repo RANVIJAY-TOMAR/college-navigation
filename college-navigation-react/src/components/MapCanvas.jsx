@@ -1,0 +1,262 @@
+import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import PropTypes from 'prop-types';
+import { motion } from 'framer-motion';
+import { IconButton } from './UiComponents/Button.jsx';
+import { FiMinus, FiPlus, FiTarget, FiPause, FiPlay } from 'react-icons/fi';
+import { MarkerAnimator } from '../core/MarkerAnimator.js';
+
+// Basic SVG size used for internal coordinate system
+// Match roughly the GLBITM campus map coordinate system from nodes/routes.
+const VIEWBOX_WIDTH = 1500;
+const VIEWBOX_HEIGHT = 1286;
+
+export const MapCanvas = forwardRef(function MapCanvas(
+  { backgroundUrl, route, edges, activeStepIndex, onSegmentChange },
+  ref,
+) {
+  const containerRef = useRef(null);
+  const [zoom, setZoom] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const panStartRef = useRef(null);
+
+  const [markerState, setMarkerState] = useState(null);
+  const animatorRef = useRef(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  // Rebuild animator when route changes
+  useEffect(() => {
+    if (animatorRef.current) {
+      animatorRef.current.destroy();
+      animatorRef.current = null;
+    }
+
+    if (!route || !route.points || route.points.length < 2) {
+      setMarkerState(null);
+      setIsPlaying(false);
+      return;
+    }
+
+    animatorRef.current = new MarkerAnimator({
+      points: route.points,
+      durationMs: 6000,
+      onUpdate: payload => {
+        setMarkerState(payload);
+      },
+      onComplete: () => {
+        setIsPlaying(false);
+      },
+      onSegmentChange: index => {
+        if (onSegmentChange) onSegmentChange(index);
+      },
+    });
+
+    setIsPlaying(true);
+    animatorRef.current.play();
+  }, [route, onSegmentChange]);
+
+  useImperativeHandle(ref, () => ({
+    replay() {
+      if (!animatorRef.current) return;
+      setIsPlaying(true);
+      animatorRef.current.replay();
+    },
+    play() {
+      if (!animatorRef.current) return;
+      setIsPlaying(true);
+      animatorRef.current.play();
+    },
+    pause() {
+      if (!animatorRef.current) return;
+      setIsPlaying(false);
+      animatorRef.current.pause();
+    },
+    setSpeed(multiplier) {
+      if (!animatorRef.current) return;
+      animatorRef.current.setSpeed(multiplier);
+    },
+    recenter() {
+      setOffset({ x: 0, y: 0 });
+      setZoom(1);
+    },
+  }));
+
+  // Pan handlers
+  const handlePointerDown = e => {
+    if (e.button !== 0) return;
+    const { clientX, clientY } = e;
+    panStartRef.current = { x: clientX, y: clientY, offsetX: offset.x, offsetY: offset.y };
+    setIsPanning(true);
+  };
+
+  const handlePointerMove = e => {
+    if (!isPanning || !panStartRef.current) return;
+    const { clientX, clientY } = e;
+    const dx = clientX - panStartRef.current.x;
+    const dy = clientY - panStartRef.current.y;
+    setOffset({ x: panStartRef.current.offsetX + dx, y: panStartRef.current.offsetY + dy });
+  };
+
+  const endPan = () => {
+    setIsPanning(false);
+    panStartRef.current = null;
+  };
+
+  const zoomBy = delta => {
+    setZoom(prev => {
+      const next = Math.min(2.4, Math.max(0.7, prev + delta));
+      return next;
+    });
+  };
+
+  const recenter = () => {
+    setOffset({ x: 0, y: 0 });
+    setZoom(1);
+  };
+
+  const markerNode = markerState ? (
+    <g
+      transform={`translate(${markerState.x}, ${markerState.y}) rotate(${markerState.angleDeg || 0})`}
+    >
+      <circle r="6" fill="#38bdf8" stroke="#0f172a" strokeWidth="2" />
+      <polygon points="0,-14 6,0 -6,0" fill="#38bdf8" />
+      <circle
+        r="16"
+        fill="none"
+        stroke="rgba(56,189,248,0.6)"
+        strokeWidth="1.5"
+        className="animate-ping"
+      />
+    </g>
+  ) : null;
+
+  return (
+    <div className="relative h-full w-full overflow-hidden bg-slate-950">
+      <motion.div
+        ref={containerRef}
+        className="map-shell relative h-full w-full cursor-grab active:cursor-grabbing"
+        style={{
+          backgroundImage: `url(${backgroundUrl})`,
+          backgroundSize: 'contain',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+        }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={endPan}
+        onPointerLeave={endPan}
+      >
+        <motion.div
+          className="absolute left-1/2 top-1/2 origin-center"
+          animate={{
+            scale: zoom,
+            x: offset.x,
+            y: offset.y,
+          }}
+          transition={{ type: 'spring', stiffness: 260, damping: 30 }}
+        >
+          <svg
+            width={VIEWBOX_WIDTH}
+            height={VIEWBOX_HEIGHT}
+            viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`}
+          >
+            {/* Base campus graph edges */}
+            {edges && edges.length > 0 &&
+              edges.map(edge => {
+                const coords = edge?.geom?.geometry?.coordinates;
+                if (!coords || !coords.length) return null;
+                const pts = coords.map(([x, y]) => `${x},${y}`).join(' ');
+                return (
+                  <polyline
+                    key={edge.id}
+                    fill="none"
+                    stroke="rgba(148,163,184,0.55)"
+                    strokeWidth="4"
+                    opacity={0.55}
+                    points={pts}
+                  />
+                );
+              })}
+
+            {/* Active route overlay */}
+            {route && route.points && route.points.length > 1 && (
+              <>
+                <defs>
+                  <linearGradient id="routeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="#6a11cb" />
+                    <stop offset="50%" stopColor="#38bdf8" />
+                    <stop offset="100%" stopColor="#22c55e" />
+                  </linearGradient>
+                </defs>
+                <polyline
+                  className="route-path"
+                  fill="none"
+                  stroke="url(#routeGradient)"
+                  strokeWidth="6"
+                  opacity={0.95}
+                  points={route.points.map(p => `${p.x},${p.y}`).join(' ')}
+                  filter="drop-shadow(0 0 18px rgba(56,189,248,0.9))"
+                />
+              </>
+            )}
+
+            {markerNode}
+          </svg>
+        </motion.div>
+      </motion.div>
+
+      {/* Map controls */}
+      <div className="pointer-events-none absolute bottom-4 left-4 flex flex-col gap-2">
+        <div className="pointer-events-auto inline-flex flex-col rounded-2xl bg-slate-900/80 border border-slate-800/80 shadow-lg shadow-black/60">
+          <IconButton label="Zoom in" onClick={() => zoomBy(0.2)}>
+            <FiPlus className="text-sm" />
+          </IconButton>
+          <IconButton label="Zoom out" onClick={() => zoomBy(-0.2)}>
+            <FiMinus className="text-sm" />
+          </IconButton>
+          <IconButton label="Recenter" onClick={recenter}>
+            <FiTarget className="text-sm" />
+          </IconButton>
+        </div>
+
+        <div className="pointer-events-auto mt-2 inline-flex items-center gap-1 rounded-2xl bg-slate-900/80 border border-slate-800/80 px-2 py-1 text-[11px] text-slate-300">
+          <IconButton
+            label={isPlaying ? 'Pause route animation' : 'Play route animation'}
+            onClick={() => {
+              if (!animatorRef.current) return;
+              if (isPlaying) {
+                animatorRef.current.pause();
+                setIsPlaying(false);
+              } else {
+                animatorRef.current.play();
+                setIsPlaying(true);
+              }
+            }}
+            className="h-7 w-7"
+          >
+            {isPlaying ? <FiPause className="text-xs" /> : <FiPlay className="text-xs" />}
+          </IconButton>
+          <span className="pr-1">Route</span>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+MapCanvas.propTypes = {
+  backgroundUrl: PropTypes.string.isRequired,
+  route: PropTypes.shape({
+    points: PropTypes.arrayOf(
+      PropTypes.shape({
+        x: PropTypes.number.isRequired,
+        y: PropTypes.number.isRequired,
+      }),
+    ),
+    length: PropTypes.number,
+  }),
+  edges: PropTypes.arrayOf(PropTypes.object),
+  activeStepIndex: PropTypes.number,
+  onSegmentChange: PropTypes.func,
+};
+
+export default MapCanvas;

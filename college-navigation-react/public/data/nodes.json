@@ -1,0 +1,62 @@
+[
+  {
+    "id": 1,
+    "name": "MESS, CAFETERIA AND GYM",
+    "x": 788,
+    "y": 790
+  },
+  {
+    "id": 2,
+    "name": "AB1 ENTRY POINT",
+    "x": 1058,
+    "y": 268
+  },
+  {
+    "id": 3,
+    "name": "BOYS HOSTEL SENIORS",
+    "x": 1034,
+    "y": 736
+  },
+  {
+    "id": 4,
+    "name": "AB 2 ENTRY POINT",
+    "x": 690,
+    "y": 422
+  },
+  {
+    "id": 5,
+    "name": "PGDM CANTEEN",
+    "x": 286,
+    "y": 450
+  },
+  {
+    "id": 6,
+    "name": "MAIN GROUND ENTRY",
+    "x": 534,
+    "y": 692
+  },
+  {
+    "id": 7,
+    "name": "MAIN GATE 1",
+    "x": 752,
+    "y": 172
+  },
+  {
+    "id": 8,
+    "name": "WORKSHOP",
+    "x": 1138,
+    "y": 984
+  },
+  {
+    "id": 9,
+    "name": "BOYS HOSTEL JUNIORS",
+    "x": 86,
+    "y": 858
+  },
+  {
+    "id": 10,
+    "name": "PGDM BLOCK ENTRY",
+    "x": 154,
+    "y": 316
+  }
+]
