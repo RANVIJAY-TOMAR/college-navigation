@@ -1,0 +1,238 @@
+[
+  {
+    "id": 1,
+    "start": 7,
+    "end": 4,
+    "startName": "MAIN GATE 1",
+    "endName": "AB 2 ENTRY POINT",
+    "path": [
+      [752, 179],
+      [750, 427],
+      [698, 420]
+    ],
+    "length": 300.48,
+    "geom": {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [752, 179],
+          [750, 427],
+          [698, 420]
+        ]
+      }
+    }
+  },
+  {
+    "id": 2,
+    "start": 7,
+    "end": 1,
+    "startName": "MAIN GATE 1",
+    "endName": "MESS, CAFETERIA AND GYM",
+    "path": [
+      [750, 186],
+      [752, 797],
+      [793, 802]
+    ],
+    "length": 652.31,
+    "geom": {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [750, 186],
+          [752, 797],
+          [793, 802]
+        ]
+      }
+    }
+  },
+  {
+    "id": 3,
+    "start": 7,
+    "end": 2,
+    "startName": "MAIN GATE 1",
+    "endName": "AB1 ENTRY POINT",
+    "path": [
+      [760, 171],
+      [794, 205],
+      [1056, 218],
+      [1051, 277]
+    ],
+    "length": 369.62,
+    "geom": {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [760, 171],
+          [794, 205],
+          [1056, 218],
+          [1051, 277]
+        ]
+      }
+    }
+  },
+  {
+    "id": 4,
+    "start": 7,
+    "end": 3,
+    "startName": "MAIN GATE 1",
+    "endName": "BOYS HOSTEL SENIORS",
+    "path": [
+      [748, 174],
+      [751, 648],
+      [1032, 645],
+      [1033, 722]
+    ],
+    "length": 832.03,
+    "geom": {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [748, 174],
+          [751, 648],
+          [1032, 645],
+          [1033, 722]
+        ]
+      }
+    }
+  },
+  {
+    "id": 5,
+    "start": 7,
+    "end": 5,
+    "startName": "MAIN GATE 1",
+    "endName": "PGDM CANTEEN",
+    "path": [
+      [756, 174],
+      [695, 206],
+      [376, 221],
+      [369, 297],
+      [369, 401],
+      [369, 453],
+      [298, 451]
+    ],
+    "length": 691.59,
+    "geom": {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [756, 174],
+          [695, 206],
+          [376, 221],
+          [369, 297],
+          [369, 401],
+          [369, 453],
+          [298, 451]
+        ]
+      }
+    }
+  },
+  {
+    "id": 6,
+    "start": 7,
+    "end": 6,
+    "startName": "MAIN GATE 1",
+    "endName": "MAIN GROUND ENTRY",
+    "path": [
+      [753, 161],
+      [747, 648],
+      [537, 645],
+      [545, 690]
+    ],
+    "length": 742.76,
+    "geom": {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [753, 161],
+          [747, 648],
+          [537, 645],
+          [545, 690]
+        ]
+      }
+    }
+  },
+  {
+    "id": 8,
+    "start": 7,
+    "end": 8,
+    "startName": "MAIN GATE 1",
+    "endName": "WORKSHOP",
+    "path": [
+      [759, 173],
+      [762, 640],
+      [1118, 643],
+      [1121, 984]
+    ],
+    "length": 1164.04,
+    "geom": {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [759, 173],
+          [762, 640],
+          [1118, 643],
+          [1121, 984]
+        ]
+      }
+    }
+  },
+  {
+    "id": 10,
+    "start": 7,
+    "end": 9,
+    "startName": "MAIN GATE 1",
+    "endName": "BOYS HOSTEL JUNIORS",
+    "path": [
+      [748, 172],
+      [742, 652],
+      [61, 646],
+      [71, 858]
+    ],
+    "length": 1373.3,
+    "geom": {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [748, 172],
+          [742, 652],
+          [61, 646],
+          [71, 858]
+        ]
+      }
+    }
+  },
+  {
+    "id": 11,
+    "start": 7,
+    "end": 10,
+    "startName": "MAIN GATE 1",
+    "endName": "PGDM BLOCK ENTRY",
+    "path": [
+      [747, 169],
+      [697, 217],
+      [173, 220],
+      [159, 302]
+    ],
+    "length": 676.51,
+    "geom": {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [747, 169],
+          [697, 217],
+          [173, 220],
+          [159, 302]
+        ]
+      }
+    }
+  }
+]

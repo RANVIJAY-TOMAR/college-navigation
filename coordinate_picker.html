@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Coordinate Picker - GLBITM Map</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+        body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
+        #map { height: 100vh; width: 100vw; }
+        .info-panel {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            z-index: 1000;
+            max-width: 300px;
+        }
+        .info-panel h3 { margin-top: 0; }
+        .coordinates { 
+            background: #f0f0f0; 
+            padding: 10px; 
+            border-radius: 4px; 
+            font-family: monospace;
+            margin: 10px 0;
+        }
+        .node-list {
+            max-height: 400px;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+        .node-item {
+            padding: 5px;
+            margin: 2px 0;
+            background: #f9f9f9;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+        button {
+            padding: 8px 15px;
+            margin: 5px 0;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover { background: #2980b9; }
+        textarea {
+            width: 100%;
+            height: 150px;
+            margin-top: 10px;
+            font-family: monospace;
+            font-size: 11px;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div class="info-panel">
+        <h3>🗺️ Coordinate Picker</h3>
+        <p><strong>Click on EN points</strong> to record coordinates</p>
+        <div class="coordinates" id="coords">Click on map...</div>
+        <button onclick="clearNodes()">Clear All</button>
+        <button onclick="exportJSON()">Export JSON</button>
+        <div class="node-list" id="nodeList"></div>
+        <textarea id="jsonOutput" readonly placeholder="JSON will appear here..."></textarea>
+    </div>
+    
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script>
+        const IMG_W = 1500;
+        const IMG_H = 1286;
+        const imgUrl = 'GLBITM Map.jpg';
+        
+        const map = L.map('map', {
+            crs: L.CRS.Simple,
+            minZoom: -2,
+            maxZoom: 2
+        });
+        
+        const bounds = [[0, 0], [IMG_H, IMG_W]];
+        const img = L.imageOverlay(imgUrl, bounds).addTo(map);
+        map.fitBounds(bounds);
+        
+        let nodes = [];
+        let nodeId = 1;
+        let markers = [];
+        
+        map.on('click', function(e) {
+            const point = e.latlng;
+            const x = Math.round(point.lng);
+            const y = Math.round(point.lat);
+            
+            const name = prompt('Enter EN point name:');
+            if (name) {
+                const node = {
+                    id: nodeId++,
+                    name: name,
+                    x: x,
+                    y: y
+                };
+                nodes.push(node);
+                
+                const marker = L.circleMarker([y, x], {
+                    radius: 8,
+                    color: '#e74c3c',
+                    fillColor: '#e74c3c',
+                    fillOpacity: 1
+                }).addTo(map).bindPopup(`ID: ${node.id}<br>${node.name}<br>(${x}, ${y})`);
+                
+                markers.push(marker);
+                updateDisplay();
+            }
+        });
+        
+        function updateDisplay() {
+            document.getElementById('coords').innerHTML = 
+                `<strong>Nodes: ${nodes.length}</strong><br>Click to add more EN points`;
+            
+            const nodeList = document.getElementById('nodeList');
+            nodeList.innerHTML = nodes.map(n => 
+                `<div class="node-item">ID ${n.id}: ${n.name} (${n.x}, ${n.y})</div>`
+            ).join('');
+            
+            document.getElementById('jsonOutput').value = JSON.stringify(nodes, null, 2);
+        }
+        
+        function clearNodes() {
+            if (confirm('Clear all nodes?')) {
+                nodes = [];
+                nodeId = 1;
+                markers.forEach(m => map.removeLayer(m));
+                markers = [];
+                updateDisplay();
+            }
+        }
+        
+        function exportJSON() {
+            const json = JSON.stringify(nodes, null, 2);
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'nodes.json';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>
+
