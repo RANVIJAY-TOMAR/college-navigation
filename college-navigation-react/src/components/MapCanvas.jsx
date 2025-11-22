@@ -20,6 +20,8 @@ export const MapCanvas = forwardRef(function MapCanvas(
   const [isPanning, setIsPanning] = useState(false);
   const panStartRef = useRef(null);
 
+  // Image is rendered inside the SVG as a background so coordinates align with routes
+
   const [markerState, setMarkerState] = useState(null);
   const animatorRef = useRef(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -31,14 +33,28 @@ export const MapCanvas = forwardRef(function MapCanvas(
       animatorRef.current = null;
     }
 
-    if (!route || !route.points || route.points.length < 2) {
+    if (!route || !Array.isArray(route.points) || route.points.length < 2) {
       setMarkerState(null);
       setIsPlaying(false);
       return;
     }
 
+    // Sanitize points before giving them to the animator so we never pass undefined/NaN
+    const cleanPoints = route.points.filter(
+      p => p && typeof p.x === 'number' && typeof p.y === 'number',
+    );
+
+    if (cleanPoints.length < 2) {
+      console.warn('[MapCanvas] Not enough valid points for animation', route.points);
+      setMarkerState(null);
+      setIsPlaying(false);
+      return;
+    }
+
+    console.log('[MapCanvas] Starting animation with points:', cleanPoints.length);
+
     animatorRef.current = new MarkerAnimator({
-      points: route.points,
+      points: cleanPoints,
       durationMs: 6000,
       onUpdate: payload => {
         setMarkerState(payload);
@@ -134,20 +150,21 @@ export const MapCanvas = forwardRef(function MapCanvas(
     <div className="relative h-full w-full overflow-hidden bg-slate-950">
       <motion.div
         ref={containerRef}
-        className="map-shell relative h-full w-full cursor-grab active:cursor-grabbing"
-        style={{
-          backgroundImage: `url(${backgroundUrl})`,
-          backgroundSize: 'contain',
-          backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat',
-        }}
+        className="map-shell relative h-full w-full cursor-grab active:cursor-grabbing overflow-hidden"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={endPan}
         onPointerLeave={endPan}
       >
         <motion.div
-          className="absolute left-1/2 top-1/2 origin-center"
+          className="absolute"
+          style={{ 
+            zIndex: 1,
+            left: '50%',
+            top: '50%',
+            transform: 'translate(-50%, -50%)',
+            transformOrigin: 'center center',
+          }}
           animate={{
             scale: zoom,
             x: offset.x,
@@ -159,7 +176,22 @@ export const MapCanvas = forwardRef(function MapCanvas(
             width={VIEWBOX_WIDTH}
             height={VIEWBOX_HEIGHT}
             viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`}
+            style={{ 
+              display: 'block',
+              position: 'relative',
+            }}
+            preserveAspectRatio="xMidYMid meet"
           >
+            {/* Map background image rendered inside SVG so coordinates match */}
+            <image
+              href={backgroundUrl.replace(/ /g, '%20')}
+              x={0}
+              y={0}
+              width={VIEWBOX_WIDTH}
+              height={VIEWBOX_HEIGHT}
+              preserveAspectRatio="xMidYMid meet"
+            />
+
             {/* Base campus graph edges */}
             {edges && edges.length > 0 &&
               edges.map(edge => {
@@ -179,26 +211,80 @@ export const MapCanvas = forwardRef(function MapCanvas(
               })}
 
             {/* Active route overlay */}
-            {route && route.points && route.points.length > 1 && (
-              <>
-                <defs>
-                  <linearGradient id="routeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor="#6a11cb" />
-                    <stop offset="50%" stopColor="#38bdf8" />
-                    <stop offset="100%" stopColor="#22c55e" />
-                  </linearGradient>
-                </defs>
-                <polyline
-                  className="route-path"
-                  fill="none"
-                  stroke="url(#routeGradient)"
-                  strokeWidth="6"
-                  opacity={0.95}
-                  points={route.points.map(p => `${p.x},${p.y}`).join(' ')}
-                  filter="drop-shadow(0 0 18px rgba(56,189,248,0.9))"
-                />
-              </>
-            )}
+            {route && Array.isArray(route.points) && route.points.length > 1 && (() => {
+              // Filter out any invalid/undefined points so we never try to read .x of undefined
+              const validPoints = route.points.filter(
+                p => p && typeof p.x === 'number' && typeof p.y === 'number',
+              );
+              if (validPoints.length < 2) {
+                console.warn('[MapCanvas] Route has no valid points to render', route);
+                return null;
+              }
+
+              console.log('[MapCanvas] Rendering route with raw/valid points =', route.points.length, validPoints.length);
+
+              const routePoints = validPoints.map(p => `${p.x},${p.y}`).join(' ');
+              return (
+                <>
+                  {/* Debug circles at each route vertex so it is VERY visible */}
+                  {validPoints.map((p, i) => (
+                    <circle
+                      key={`debug-${i}`}
+                      cx={p.x}
+                      cy={p.y}
+                      r="10"
+                      fill="none"
+                      stroke="yellow"
+                      strokeWidth="4"
+                    />
+                  ))}
+
+                  <defs>
+                    <linearGradient id="routeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" stopColor="#6a11cb" />
+                      <stop offset="50%" stopColor="#38bdf8" />
+                      <stop offset="100%" stopColor="#22c55e" />
+                    </linearGradient>
+                  </defs>
+                  <polyline
+                    className="route-path"
+                    fill="none"
+                    stroke="url(#routeGradient)"
+                    strokeWidth="8"
+                    opacity={1}
+                    points={routePoints}
+                    style={{
+                      filter: 'drop-shadow(0 0 8px rgba(56,189,248,0.9))',
+                      zIndex: 10,
+                    }}
+                  />
+                  {/* Start marker */}
+                  {validPoints[0] && (
+                    <circle
+                      cx={validPoints[0].x}
+                      cy={validPoints[0].y}
+                      r="8"
+                      fill="#e74c3c"
+                      stroke="#fff"
+                      strokeWidth="2"
+                      style={{ zIndex: 11 }}
+                    />
+                  )}
+                  {/* End marker */}
+                  {validPoints[validPoints.length - 1] && (
+                    <circle
+                      cx={validPoints[validPoints.length - 1].x}
+                      cy={validPoints[validPoints.length - 1].y}
+                      r="8"
+                      fill="#22c55e"
+                      stroke="#fff"
+                      strokeWidth="2"
+                      style={{ zIndex: 11 }}
+                    />
+                  )}
+                </>
+              );
+            })()}
 
             {markerNode}
           </svg>

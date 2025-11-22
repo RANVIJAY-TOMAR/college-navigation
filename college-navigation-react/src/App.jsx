@@ -5,7 +5,12 @@ import LeftSidebar from './components/LeftSidebar.jsx';
 import MapCanvas from './components/MapCanvas.jsx';
 import DirectionsPanel from './components/DirectionsPanel.jsx';
 import FloatingInstruction from './components/FloatingInstruction.jsx';
-import { generateDirections } from './utils/pathfinding.js';
+import { generateDirections, PIXELS_TO_METERS } from './utils/pathfinding.js';
+
+// Map image path - file is in public folder
+// If you renamed the file to remove space, use: '/GLBITM_Map.jpg'
+// Otherwise, keep the space and it will be URL encoded automatically
+const MAP_IMAGE_PATH = '/GLBITM Map.jpg';
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -163,16 +168,29 @@ function App() {
           fetch('/data/edges.json'),
           fetch('/data/routes.json'),
         ]);
+        
+        if (!nodesRes.ok) {
+          console.error('❌ Failed to load nodes.json:', nodesRes.status, nodesRes.statusText);
+        }
+        if (!edgesRes.ok) {
+          console.error('❌ Failed to load edges.json:', edgesRes.status, edgesRes.statusText);
+        }
+        if (!routesRes.ok) {
+          console.warn('⚠️ Failed to load routes.json (optional):', routesRes.status);
+        }
+        
         const [nodesJson, edgesJson, routesJson] = await Promise.all([
-          nodesRes.json(),
-          edgesRes.json(),
-          routesRes.json(),
+          nodesRes.ok ? nodesRes.json() : [],
+          edgesRes.ok ? edgesRes.json() : [],
+          routesRes.ok ? routesRes.json().catch(() => []) : [],
         ]);
+        
         setNodes(nodesJson || []);
         setEdges(edgesJson || []);
         setRoutesData(routesJson || []);
       } catch (err) {
-        console.error('Failed to load campus data', err);
+        console.error('❌ Failed to load campus data:', err);
+        alert('Failed to load map data. Please check the browser console for details.');
       }
     }
     loadData();
@@ -224,47 +242,97 @@ function App() {
     edges.forEach(e => {
       if (!a[e.source]) a[e.source] = [];
       if (!a[e.target]) a[e.target] = [];
+      // e.length in edges.json is already in pixels (editor calculates it from coordinates)
       a[e.source].push({ to: e.target, weight: e.length });
       a[e.target].push({ to: e.source, weight: e.length });
     });
     return a;
   }, [edges]);
 
-  const handleFindRoute = () => {
-    if (!startId || !endId || !nodes.length) return;
+  // Helper: compute total polyline length in pixels from [x,y] coordinates
+  function polylinePixels(coords) {
+    if (!coords || coords.length < 2) return 0;
+    let len = 0;
+    for (let i = 0; i < coords.length - 1; i++) {
+      const [x1, y1] = coords[i];
+      const [x2, y2] = coords[i + 1];
+      len += Math.hypot(x2 - x1, y2 - y1);
+    }
+    return len;
+  }
 
-    const sId = startId;
-    const eId = endId;
+  const handleFindRoute = () => {
+    console.log('[App] handleFindRoute called with startId, endId =', startId, endId);
+
+    if (!startId || !endId) {
+      console.warn('⚠️ Please select both start and end locations');
+      return;
+    }
+    if (!nodes.length) {
+      console.error('❌ No nodes loaded. Cannot find route.');
+      return;
+    }
+
+    // Ensure IDs are numbers for comparison with routes.json
+    const sId = typeof startId === 'number' ? startId : parseInt(startId, 10);
+    const eId = typeof endId === 'number' ? endId : parseInt(endId, 10);
+    console.log('[App] Normalized IDs sId, eId =', sId, eId);
 
     // Try to find a manually traced route first (from routes.json)
+    // routes.json has start and end as numbers, so we compare as numbers
     const manual =
-      routesData.find(
-        r => (r.start === sId && r.end === eId) || (r.start === eId && r.end === sId),
-      ) || null;
+      routesData.find(r => {
+        const routeStart = typeof r.start === 'number' ? r.start : parseInt(r.start, 10);
+        const routeEnd = typeof r.end === 'number' ? r.end : parseInt(r.end, 10);
+        return (
+          (routeStart === sId && routeEnd === eId) ||
+          (routeStart === eId && routeEnd === sId)
+        );
+      }) || null;
+
+    console.log('[App] Manual route match id =', manual ? manual.id : null);
 
     const startNode = placesById[sId];
     const endNode = placesById[eId];
+    console.log('[App] startNode, endNode =', startNode, endNode);
 
     let points = [];
     let length = 0;
 
     if (manual) {
+      // Use manual route from routes.json
       const coords =
         manual.geom?.geometry?.coordinates?.length
           ? manual.geom.geometry.coordinates
           : manual.path || [];
+
+      console.log('[App] Using manual route coords length =', coords.length);
+
       if (coords.length >= 2) {
-        points = coords.map(([x, y], idx) => ({
-          x,
-          y,
-          placeId:
-            idx === 0 ? startNode?.id : idx === coords.length - 1 ? endNode?.id : undefined,
-        }));
-        length = manual.length ?? 0;
+        points = coords
+          .filter(
+            coord =>
+              coord &&
+              coord.length >= 2 &&
+              typeof coord[0] === 'number' &&
+              typeof coord[1] === 'number',
+          )
+          .map(([x, y], idx, arr) => ({
+            x: Number(x),
+            y: Number(y),
+            placeId:
+              idx === 0 ? startNode?.id : idx === arr.length - 1 ? endNode?.id : undefined,
+          }));
+        // Recompute length from coordinates in pixels to be precise,
+        // instead of trusting the stored "length" field.
+        const totalPixels = polylinePixels(coords);
+        length = totalPixels;
+        console.log('[App] Manual route totalPixels =', totalPixels, '≈', (totalPixels * PIXELS_TO_METERS).toFixed(1), 'm');
       }
     } else if (Object.keys(adj).length) {
       // Use Dijkstra over edges if no manual route
       const result = dijkstra(adj, String(sId), String(eId));
+      console.log('[App] Dijkstra result =', result);
       if (result && result.path && result.path.length > 1) {
         const seq = [];
         for (let i = 0; i < result.path.length - 1; i++) {
@@ -288,29 +356,56 @@ function App() {
           }
         }
         if (seq.length >= 2) {
-          points = seq.map(([x, y], idx) => ({
-            x,
-            y,
-            placeId:
-              idx === 0 ? startNode?.id : idx === seq.length - 1 ? endNode?.id : undefined,
-          }));
+          points = seq
+            .filter(
+              coord =>
+                coord &&
+                coord.length >= 2 &&
+                typeof coord[0] === 'number' &&
+                typeof coord[1] === 'number',
+            )
+            .map(([x, y], idx, arr) => ({
+              x: Number(x),
+              y: Number(y),
+              placeId:
+                idx === 0 ? startNode?.id : idx === arr.length - 1 ? endNode?.id : undefined,
+            }));
+          // result.distance is already in pixels (sum of edge.length),
+          // so keep it as our canonical pixel length.
           length = result.distance ?? 0;
+          console.log('[App] Dijkstra route totalPixels =', length, '≈', (length * PIXELS_TO_METERS).toFixed(1), 'm');
         }
       }
     }
 
     // Fallback to straight line between nodes if nothing else
     if (!points.length && startNode && endNode) {
+      console.log('[App] Falling back to straight line between start and end nodes');
       points = [
         { x: startNode.x, y: startNode.y, placeId: startNode.id },
         { x: endNode.x, y: endNode.y, placeId: endNode.id },
       ];
+      // Straight-line distance in pixels between the two nodes
       length = Math.hypot(endNode.x - startNode.x, endNode.y - startNode.y);
+      console.log('[App] Fallback straight route totalPixels =', length, '≈', (length * PIXELS_TO_METERS).toFixed(1), 'm');
+    }
+
+    if (points.length < 2) {
+      console.error('❌ Route computation failed: insufficient points');
+      alert('Could not find a route between the selected locations. Please try different locations.');
+      return;
     }
 
     const newRoute = { points, length };
+    console.log(
+      '[App] Final route points length =',
+      points.length,
+      'example points:',
+      points.slice(0, 5),
+    );
     setRoute(newRoute);
     const steps = generateDirections(newRoute, placesById);
+    console.log('[App] Generated directions steps =', steps.length);
     setDirections(steps);
     setActiveStepIndex(0);
   };
@@ -419,7 +514,7 @@ function App() {
           <div className="relative flex-1">
             <MapCanvas
               ref={mapRef}
-              backgroundUrl="/GLBITM Map.jpg"
+              backgroundUrl={MAP_IMAGE_PATH}
               route={route}
               edges={edges}
               activeStepIndex={activeStepIndex}

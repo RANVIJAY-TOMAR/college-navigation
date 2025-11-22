@@ -51,6 +51,21 @@ export class MarkerAnimator {
       const a = this.points[idx];
       const b = this.points[Math.min(idx + 1, this.points.length - 1)];
 
+      // Guard against any bad/undefined points so we don't crash with "reading 'x' of undefined".
+      // If data is bad for a frame, just skip updating instead of killing the whole animation.
+      if (
+        !a ||
+        !b ||
+        typeof a.x !== 'number' ||
+        typeof a.y !== 'number' ||
+        typeof b.x !== 'number' ||
+        typeof b.y !== 'number'
+      ) {
+        console.warn('[MarkerAnimator] Invalid point data, skipping frame', { a, b, idx, progress });
+        this._raf = requestAnimationFrame(step);
+        return;
+      }
+
       const x = a.x + (b.x - a.x) * frac;
       const y = a.y + (b.y - a.y) * frac;
 

@@ -191,7 +191,7 @@
         const IMG_W = 1500;
         const IMG_H = 1286;
         // Use the same public map asset as the React app
-        const imgUrl = '/GLBITM Map.jpg';
+        const imgUrl = 'public/GLBITM Map.jpg';
         
         const map = L.map('map', {
             crs: L.CRS.Simple,
@@ -232,7 +232,7 @@
         async function loadNodes() {
             try {
                 console.log('Loading nodes.json...');
-                const response = await fetch('/data/nodes.json');
+                const response = await fetch('public/data/nodes.json');
                 
                 if (!response.ok) {
                     throw new Error('Failed to load nodes.json: ' + response.status);
@@ -337,7 +337,7 @@
         
         async function loadRoutes() {
             try {
-                const response = await fetch('/data/routes.json');
+                const response = await fetch('public/data/routes.json');
                 routes = await response.json();
                 updateRouteDisplay();
                 drawAllRoutes();

@@ -54,19 +54,41 @@ export function DirectionsPanel({
               <div className="flex-1 min-h-0 overflow-y-auto space-y-2 mt-1">
                 {hasSteps ? (
                   steps.map((step, index) => (
-                    <button
+                    <motion.button
                       key={step.id}
                       type="button"
                       onClick={() => onStepClick(index)}
+                      initial={{ opacity: 0, x: -8 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: index * 0.09, duration: 0.4 }}
                       className={
-                        'w-full text-left rounded-2xl border px-3 py-2.5 text-xs transition ' +
+                        'relative w-full text-left rounded-2xl border px-3 py-2.5 text-xs transition ' +
                         (index === activeIndex
                           ? 'border-sky-400/70 bg-sky-500/10 shadow shadow-sky-500/40'
                           : 'border-slate-700/70 bg-slate-900/70 hover:bg-slate-800/80')
                       }
                     >
+                      {/* Animated vertical bar */}
+                      <motion.div
+                        className="absolute left-1.5 top-2 bottom-2 w-0.5 bg-gradient-to-b from-green-500 to-green-400 rounded-full"
+                        initial={{ scaleY: 0, opacity: 0 }}
+                        animate={{ scaleY: 1, opacity: 1 }}
+                        transition={{ delay: index * 0.09, duration: 0.4 }}
+                        style={{ transformOrigin: 'top' }}
+                      />
+                      
+                      {/* Animated checkmark */}
+                      <motion.div
+                        className="absolute -left-0.5 top-0 w-4 h-4 rounded-full bg-green-500 text-[#022c22] text-[10px] flex items-center justify-center shadow-lg shadow-green-500/50"
+                        initial={{ scale: 0, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        transition={{ delay: index * 0.09 + 0.12, duration: 0.35 }}
+                      >
+                        ✓
+                      </motion.div>
+
                       <div className="flex items-center gap-2">
-                        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-tr from-[#6a11cb] to-[#2575fc] text-[11px] text-white font-semibold">
+                        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-tr from-[#6a11cb] to-[#2575fc] text-[11px] text-white font-semibold shadow-lg shadow-indigo-500/50">
                           {index + 1}
                         </div>
                         <div className="flex-1">
@@ -83,7 +105,7 @@ export function DirectionsPanel({
                           </div>
                         )}
                       </div>
-                    </button>
+                    </motion.button>
                   ))
                 ) : (
                   <div className="text-[11px] text-slate-500 pt-3">
